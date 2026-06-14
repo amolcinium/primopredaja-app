@@ -82,8 +82,13 @@
   .ck .cnp{width:30%} .ck td:nth-child(5){min-width:120px}
   .pgstan h2{text-align:center;font-size:16px;margin:0 0 6px}
   .pgstan h3{font-size:12px;margin:12px 0 2px;color:var(--navy);text-transform:uppercase}
-  @media print{ body>*:not(#zapisnik){display:none!important} .noprint{display:none!important}
-    .zapisnik{position:absolute} .zdoc input,.zdoc textarea{border:none;padding:0} }
+  @page{margin:12mm}
+  @media print{ html,body{height:auto!important;overflow:visible!important;background:#fff!important}
+    body>*:not(#zapisnik){display:none!important} .noprint{display:none!important}
+    #zapisnik{position:static!important;inset:auto!important;overflow:visible!important;height:auto!important;background:#fff}
+    .zdoc{max-width:100%!important;margin:0!important;padding:0!important}
+    .zdoc input,.zdoc textarea{border:none;padding:0}
+    .pgstan{page-break-inside:auto} .ck tr{page-break-inside:avoid} }
 </style>
 </head>
 <body>
@@ -175,8 +180,10 @@ function provFor(stanId){
   const m={}; DATA.provjere.filter(p=>p.stan_id===stanId).forEach(p=>m[p.stavka_id]=p.status); return m;
 }
 function tipKod(stan){ return stan&&stan.tip_grijanja==='Električno podno'?'el':stan&&stan.tip_grijanja==='Vodeno podno + kotao'?'vod':null; }
-function applicableStavke(stan){ const k=tipKod(stan);
-  return DATA.stavke.filter(s=>{ const p=s.primjenjivost||'sve'; return p==='sve' || !k || p===k; }); }
+function applicableStavke(stan){ const k=tipKod(stan); const vr=(stan&&stan.vrsta)||'stan';
+  return DATA.stavke.filter(s=>{ const sv=s.vrsta||'stan';
+    if(sv!=='sve' && sv!==vr) return false;            // stan vs poslovni prostor
+    const p=s.primjenjivost||'sve'; return p==='sve' || !k || p===k; }); } // tip grijanja
 function stanStats(stanId){
   const s=DATA.stanovi.find(x=>x.id===stanId);
   const m=provFor(stanId); const list=applicableStavke(s); const tot=list.length;
@@ -240,7 +247,7 @@ function renderDashboard(){
       <div style="font-size:34px;font-weight:800;color:var(--blue)">${avg}%</div>
       <div class="bar"><i style="width:${avg}%"></i></div></div>
     <div class="kpis">
-      ${K(ukupno,'Ukupno stanova','var(--navy)')}
+      ${K(ukupno,'Ukupno jedinica','var(--navy)')}
       ${K(spremni,'Spremni za primopredaju','var(--green)')}
       ${K(utoku,'U toku','var(--orange)')}
       ${K(nije,'Nije počelo','var(--grey)')}
@@ -264,8 +271,8 @@ function renderStanovi(){
   let html=`<div class="filterbar">${F('all','Svi')}${F('nije','Nije spreman')}${F('ned','Nedostaci')}${F('spreman','Spremni')}${sprat.map(sp=>F('sprat:'+sp,'Sprat '+sp)).join('')}</div>`;
   html+=`<div style="margin:0 0 10px"><button class="badge" style="background:var(--navy);color:#fff;padding:9px 14px" onclick="openPrintDialog('all')">🖨️ Štampaj checkliste — izbor stanova (${DATA.stanovi.length})</button></div>`;
   html+=`<div class="card">${list.map(({s,st})=>`<div class="stan" onclick="openStan('${s.id}')">
-      <div class="ozn">${s.oznaka}</div>
-      <div class="meta">${s.sprat?('Sprat '+s.sprat):'—'} · ${s.kvadratura?s.kvadratura+' m²':'—'}
+      <div class="ozn">${s.oznaka}${s.vrsta==='poslovni'?' <span style="font-size:10px;background:var(--navy);color:#fff;border-radius:4px;padding:1px 5px;vertical-align:middle">PP</span>':''}</div>
+      <div class="meta">${s.kategorija?s.kategorija+' · ':''}${s.sprat?('Sprat '+s.sprat):'—'} · ${s.kvadratura?s.kvadratura+' m²':'—'}
         ${st.openDor?` · <span style="color:var(--red)">🛠️ ${st.openDor}</span>`:''}</div>
       <div class="pct" style="color:${st.pct===100?'var(--green)':'var(--navy)'}">${st.pct}%</div>
       <span class="pill ${st.ready?'ok':'no'}">${st.ready?'Spreman':'—'}</span>
@@ -312,8 +319,10 @@ function renderStan(){
       </div>
     </div>
     <div class="bar" style="margin-top:8px"><i style="width:${st.pct}%"></i></div>
-    <div class="muted" style="margin-top:6px">Tip grijanja: <b>${s.tip_grijanja||'nije postavljen'}</b>
-      · Otvorenih dorada: <b style="color:${open.length?'var(--red)':'inherit'}">${open.length}</b></div>
+    <div class="muted" style="margin-top:6px">
+      <b>${s.vrsta==='poslovni'?'🏪 Poslovni prostor':'🏠 Stan'}</b>${s.kategorija?(' · '+s.kategorija):''}${s.vrsta!=='poslovni'?(' · Grijanje: '+(s.tip_grijanja||'—')):''}
+      · Otvorenih dorada: <b style="color:${open.length?'var(--red)':'inherit'}">${open.length}</b>
+      ${s.opis?`<br><span style="font-size:12px">${s.opis}</span>`:''}</div>
   </div>`;
   const appl=applicableStavke(s);
   rooms().forEach(room=>{
@@ -376,7 +385,18 @@ async function setStatus(stavkaId,status){
 function editStan(id){
   const s=DATA.stanovi.find(x=>x.id===id);
   const modal=document.createElement('div'); modal.className='modal';
+  const esc=v=>(v||'').replace(/"/g,'&quot;');
   modal.innerHTML=`<div class="sheet"><h3>${s.oznaka} — podaci</h3>
+    <label>Vrsta jedinice</label><select id="e_vrsta">
+      <option value="stan" ${(s.vrsta||'stan')==='stan'?'selected':''}>Stan</option>
+      <option value="poslovni" ${s.vrsta==='poslovni'?'selected':''}>Poslovni prostor</option></select>
+    <label>Kategorija / struktura</label>
+    <input id="e_kat" list="katlist" value="${esc(s.kategorija)}" placeholder="npr. Dvosoban">
+    <datalist id="katlist">
+      <option value="Garsonjera"><option value="Jednosoban"><option value="Dvosoban">
+      <option value="Dvosoban (2 kupatila)"><option value="Trosoban"><option value="Četvorosoban">
+      <option value="Penthouse"><option value="Dupleks"><option value="Lokal"><option value="Kancelarija"><option value="Magacin"></datalist>
+    <label>Opis (opciono)</label><input id="e_opis" value="${esc(s.opis)}" placeholder="napomena o jedinici">
     <label>Sprat</label><input id="e_sprat" value="${s.sprat||''}">
     <label>Kvadratura (m²)</label><input id="e_kv" type="number" value="${s.kvadratura||''}">
     <label>Tip grijanja</label><select id="e_tip">
@@ -392,7 +412,8 @@ function editStan(id){
 }
 async function saveStan(id){
   const patch={ sprat:val('e_sprat')||null, kvadratura:val('e_kv')||null,
-    tip_grijanja:val('e_tip')||null, status_primopredaje:val('e_st') };
+    tip_grijanja:val('e_tip')||null, status_primopredaje:val('e_st'),
+    vrsta:val('e_vrsta')||'stan', kategorija:val('e_kat')||null, opis:val('e_opis')||null };
   closeModal();
   const { error }=await sb.from('stanovi').update(patch).eq('id',id);
   if(error){ alert('Greška: '+error.message); return; }
@@ -412,11 +433,12 @@ function renderZapisnik(stanId){
      <button class="zprint" onclick="window.print()">🖨️ Štampaj / PDF</button>
    </div>
    <div class="zdoc">
-     <h2>ZAPISNIK O PRIMOPREDAJI STANA</h2>
+     <h2>ZAPISNIK O PRIMOPREDAJI ${s.vrsta==='poslovni'?'POSLOVNOG PROSTORA':'STANA'}</h2>
      <table class="zt">
-       <tr><td>Zgrada</td><td>${DATA.zgrada.naziv||''}</td><td>Stan</td><td><b>${s.oznaka}</b></td></tr>
-       <tr><td>Sprat</td><td>${s.sprat||'—'}</td><td>Kvadratura</td><td>${s.kvadratura?s.kvadratura+' m²':'—'}</td></tr>
-       <tr><td>Tip grijanja</td><td>${s.tip_grijanja||'—'}</td><td>Završenost</td><td>${st.pct}%</td></tr>
+       <tr><td>Zgrada</td><td>${DATA.zgrada.naziv||''}</td><td>${s.vrsta==='poslovni'?'Lokal':'Stan'}</td><td><b>${s.oznaka}</b></td></tr>
+       <tr><td>Kategorija</td><td>${s.kategorija||'—'}</td><td>Sprat</td><td>${s.sprat||'—'}</td></tr>
+       <tr><td>Kvadratura</td><td>${s.kvadratura?s.kvadratura+' m²':'—'}</td><td>Završenost</td><td>${st.pct}%</td></tr>
+       <tr><td>${s.vrsta==='poslovni'?'Grijanje/klima':'Tip grijanja'}</td><td>${s.tip_grijanja||'—'}</td><td>Vrsta</td><td>${s.vrsta==='poslovni'?'Poslovni prostor':'Stan'}</td></tr>
      </table>
      <div class="zrow"><label>Kupac</label><input id="z_kupac" value="${s.kupac||''}"></div>
      <div class="zrow"><label>Datum primopredaje</label><input id="z_datum" type="date" value="${s.datum_primopredaje||''}"></div>
@@ -495,11 +517,11 @@ function printChecklist(ids,mode){
     let pmap={};
     if(mode==='data') DATA.provjere.filter(p=>p.stan_id===s.id).forEach(p=>pmap[p.stavka_id]={s:p.status,n:p.napomena});
     body+=`<div class="pgstan" style="${idx<stans.length-1?'page-break-after:always':''}">
-      <h2>CHECKLISTA ZAVRŠNIH RADOVA${mode==='data'?' — STANJE':''}</h2>
+      <h2>CHECKLISTA ZAVRŠNIH RADOVA${s.vrsta==='poslovni'?' — POSLOVNI PROSTOR':''}${mode==='data'?' — STANJE':''}</h2>
       <table class="zt">
-        <tr><td>Zgrada</td><td>${DATA.zgrada.naziv||''}</td><td>Stan</td><td><b>${s.oznaka}</b></td></tr>
-        <tr><td>Sprat</td><td>${s.sprat||'—'}</td><td>Tip grijanja</td><td>${s.tip_grijanja||'—'}</td></tr>
-        <tr><td>Datum</td><td>______________</td><td>Pregledao</td><td>______________</td></tr>
+        <tr><td>Zgrada</td><td>${DATA.zgrada.naziv||''}</td><td>${s.vrsta==='poslovni'?'Lokal':'Stan'}</td><td><b>${s.oznaka}</b></td></tr>
+        <tr><td>Kategorija</td><td>${s.kategorija||'—'}</td><td>Sprat</td><td>${s.sprat||'—'}</td></tr>
+        <tr><td>${s.vrsta==='poslovni'?'Grijanje/klima':'Tip grijanja'}</td><td>${s.tip_grijanja||'—'}</td><td>Datum / Pregledao</td><td>____________</td></tr>
       </table>`;
     rs.forEach(room=>{
       const items=appl.filter(x=>x.prostorija===room);
@@ -616,7 +638,10 @@ async function openAdmin(){
       </div>`).join('')}
     </div>
     <div style="display:flex;gap:8px;margin-top:8px">
-      <input id="new_ozn" placeholder="oznaka novog stana (npr. S-39)">
+      <input id="new_ozn" placeholder="oznaka (npr. S-39 ili PP-01)">
+      <select id="new_vrsta" style="max-width:160px">
+        <option value="stan">Stan</option>
+        <option value="poslovni">Poslovni prostor</option></select>
       <button class="badge" style="background:var(--green);color:#fff;padding:0 16px" onclick="addStan()">+ Dodaj</button>
     </div>
     <hr style="margin:16px 0;border:none;border-top:1px solid var(--line)">
@@ -636,6 +661,10 @@ async function openAdmin(){
     <label>Dodaj stavku — upiši novu ILI postojeću kategoriju</label>
     <input id="new_pros" list="roomlist" placeholder="kategorija (npr. KUHINJA ili nova)">
     <datalist id="roomlist">${rooms().map(r=>`<option value="${r}">`).join('')}</datalist>
+    <select id="new_vrsta_st" style="margin-top:6px">
+      <option value="stan">za stanove</option>
+      <option value="poslovni">za poslovni prostor</option>
+      <option value="sve">za sve jedinice</option></select>
     <select id="new_prim" style="margin-top:6px">
       <option value="sve">važi za sve stanove</option>
       <option value="el">samo električno grijanje</option>
@@ -659,8 +688,9 @@ async function saveZgrada(){
 }
 async function addStan(){
   const oznaka=val('new_ozn'); if(!oznaka||!ZGRADA) return;
+  const vrsta=val('new_vrsta')||'stan';
   const red=(DATA.stanovi.length?Math.max(...DATA.stanovi.map(s=>s.redoslijed||0)):0)+1;
-  const { error }=await sb.from('stanovi').insert({zgrada_id:ZGRADA.id,oznaka,redoslijed:red});
+  const { error }=await sb.from('stanovi').insert({zgrada_id:ZGRADA.id,oznaka,redoslijed:red,vrsta});
   if(error){ alert('Greška: '+error.message); return; }
   closeModal(); await loadAll(); openAdmin();
 }
@@ -673,11 +703,12 @@ async function delStan(id,ozn){
 async function addStavka(){
   const pros=val('new_pros'), naziv=val('new_stav'); if(!pros||!naziv){ alert('Unesi kategoriju i naziv.'); return; }
   const prim=val('new_prim')||'sve';
+  const vrsta=val('new_vrsta_st')||'stan';
   const nid=(DATA.stavke.length?Math.max(...DATA.stavke.map(s=>s.id)):0)+1;
   const inCat=DATA.stavke.filter(s=>s.prostorija===pros);
   const red=inCat.length ? Math.max(...inCat.map(s=>s.redoslijed))+1
                          : (DATA.stavke.length?Math.max(...DATA.stavke.map(s=>s.redoslijed)):0)+1;
-  const { error }=await sb.from('stavke').insert({id:nid,prostorija:pros,naziv,redoslijed:red,primjenjivost:prim});
+  const { error }=await sb.from('stavke').insert({id:nid,prostorija:pros,naziv,redoslijed:red,primjenjivost:prim,vrsta});
   if(error){ alert('Greška: '+error.message); return; }
   closeModal(); await loadAll(); openAdmin();
 }
