@@ -73,7 +73,11 @@ let CFG = JSON.parse(localStorage.getItem('pp_cfg') || 'null')
 let sb = (CFG.url && CFG.anon) ? supabase.createClient(CFG.url, CFG.anon) : null;
 function SHARED_EMAIL(){ return CFG.email || "ekipa@primopredaja.local"; }
 // ===========================
-const ROOMS = ["ULAZ / HODNIK","DNEVNA / TRPEZARIJA","KUHINJA","SPAVAĆA SOBA","KUPATILO / WC","TERASA / BALKON","GRIJANJE (podno)","ZAVRŠNO / PREDAJA"];
+function rooms(){ // kategorije (prostorije) dinamički iz baze, redom po redoslijedu
+  const ord={}, list=[];
+  DATA.stavke.forEach(s=>{ if(!(s.prostorija in ord)){ ord[s.prostorija]=s.redoslijed; list.push(s.prostorija); } });
+  return list.sort((a,b)=>ord[a]-ord[b]);
+}
 const OPEN_STAT = s => s!=='Provjereno OK' && s!=='Odustalo';
 const app = document.getElementById('app');
 let DATA = { stanovi:[], stavke:[], provjere:[], dorade:[] };
@@ -236,7 +240,7 @@ function renderStan(){
     <div class="muted" style="margin-top:6px">Tip grijanja: <b>${s.tip_grijanja||'nije postavljen'}</b>
       · Otvorenih dorada: <b style="color:${open.length?'var(--red)':'inherit'}">${open.length}</b></div>
   </div>`;
-  ROOMS.forEach(room=>{
+  rooms().forEach(room=>{
     const items=DATA.stavke.filter(x=>x.prostorija===room);
     if(!items.length) return;
     html+=`<div class="room">${room}</div>`;
@@ -406,6 +410,22 @@ async function openAdmin(){
       <button class="badge" style="background:var(--green);color:#fff;padding:0 16px" onclick="addStan()">+ Dodaj</button>
     </div>
     <hr style="margin:16px 0;border:none;border-top:1px solid var(--line)">
+    <label>Checklista — kategorije i stavke (${DATA.stavke.length})</label>
+    <div id="admStav" style="max-height:30vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px">
+      ${rooms().map(room=>`<div style="font-weight:700;color:var(--navy);font-size:12px;margin:6px 0 2px">${room}</div>`+
+        DATA.stavke.filter(s=>s.prostorija===room).map(s=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 4px;border-bottom:1px solid var(--line)">
+          <span style="font-size:13px">${s.naziv}</span>
+          <button class="badge" style="background:var(--redbg);color:var(--red)" onclick="delStavka(${s.id})">×</button>
+        </div>`).join('')).join('')}
+    </div>
+    <label>Dodaj stavku — upiši novu ILI postojeću kategoriju</label>
+    <input id="new_pros" list="roomlist" placeholder="kategorija (npr. KUHINJA ili nova)">
+    <datalist id="roomlist">${rooms().map(r=>`<option value="${r}">`).join('')}</datalist>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <input id="new_stav" placeholder="naziv stavke / detalja za provjeru">
+      <button class="badge" style="background:var(--green);color:#fff;padding:0 16px" onclick="addStavka()">+ Dodaj</button>
+    </div>
+    <hr style="margin:16px 0;border:none;border-top:1px solid var(--line)">
     <button class="btn ghost" onclick="closeModal();renderSetup()">🔑 Promijeni Supabase ključeve</button>
     <button class="btn ghost" onclick="closeModal()">Zatvori</button>
   </div>`;
@@ -427,6 +447,24 @@ async function addStan(){
 async function delStan(id,ozn){
   if(!confirm('Obrisati stan '+ozn+'? Briše i sve provjere i dorade za taj stan.')) return;
   const { error }=await sb.from('stanovi').delete().eq('id',id);
+  if(error){ alert('Greška: '+error.message); return; }
+  closeModal(); await loadAll(); openAdmin();
+}
+async function addStavka(){
+  const pros=val('new_pros'), naziv=val('new_stav'); if(!pros||!naziv){ alert('Unesi kategoriju i naziv.'); return; }
+  const nid=(DATA.stavke.length?Math.max(...DATA.stavke.map(s=>s.id)):0)+1;
+  const inCat=DATA.stavke.filter(s=>s.prostorija===pros);
+  const red=inCat.length ? Math.max(...inCat.map(s=>s.redoslijed))+1
+                         : (DATA.stavke.length?Math.max(...DATA.stavke.map(s=>s.redoslijed)):0)+1;
+  const { error }=await sb.from('stavke').insert({id:nid,prostorija:pros,naziv,redoslijed:red});
+  if(error){ alert('Greška: '+error.message); return; }
+  closeModal(); await loadAll(); openAdmin();
+}
+async function delStavka(id){
+  if(!confirm('Obrisati ovu stavku iz checkliste SVIH stanova? Briše i njene provjere/dorade.')) return;
+  await sb.from('dorade').delete().eq('stavka_id',id);
+  await sb.from('provjere').delete().eq('stavka_id',id);
+  const { error }=await sb.from('stavke').delete().eq('id',id);
   if(error){ alert('Greška: '+error.message); return; }
   closeModal(); await loadAll(); openAdmin();
 }
