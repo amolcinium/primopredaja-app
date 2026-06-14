@@ -683,10 +683,14 @@ function editDorada(id){
     <label>Status</label><select id="d_st">
       ${['Otvoreno','U doradi','Popravljeno - čeka kontrolu','Provjereno OK','Odustalo'].map(o=>`<option ${d.status===o?'selected':''}>${o}</option>`).join('')}</select>
     <label>Kontrolisao</label><input id="d_kon" value="${d.kontrolisao||''}">
-    <label>📷 Foto prije</label><input type="file" accept="image/*" capture="environment" onchange="upPhoto(this,'${id}','foto_prije')">
-    ${d.foto_prije?`<a href="${d.foto_prije}" target="_blank" class="muted">otvori sliku prije</a>`:''}
-    <label>📷 Foto poslije</label><input type="file" accept="image/*" capture="environment" onchange="upPhoto(this,'${id}','foto_poslije')">
-    ${d.foto_poslije?`<a href="${d.foto_poslije}" target="_blank" class="muted">otvori sliku poslije</a>`:''}
+    <label>📷 Foto prije (problem)</label><input type="file" accept="image/*" capture="environment" onchange="upPhoto(this,'${id}','foto_prije')">
+    ${d.foto_prije?`<div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+      <a href="${d.foto_prije}" target="_blank" class="muted">otvori sliku</a>
+      <button class="badge" style="background:var(--green);color:#fff" onclick="shareFoto('${id}','foto_prije')">📤 Pošalji majstoru</button></div>`:''}
+    <label>📷 Foto poslije (popravljeno)</label><input type="file" accept="image/*" capture="environment" onchange="upPhoto(this,'${id}','foto_poslije')">
+    ${d.foto_poslije?`<div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+      <a href="${d.foto_poslije}" target="_blank" class="muted">otvori sliku</a>
+      <button class="badge" style="background:var(--green);color:#fff" onclick="shareFoto('${id}','foto_poslije')">📤 Pošalji majstoru</button></div>`:''}
     <button class="btn" onclick="saveDorada('${id}')">Sačuvaj</button>
     <button class="btn ghost" onclick="closeModal()">Otkaži</button></div>`;
   modal.onclick=e=>{ if(e.target===modal) closeModal(); };
@@ -709,7 +713,32 @@ async function upPhoto(inp,id,field){
   if(error){ alert('Upload greška: '+error.message); return; }
   const { data }=sb.storage.from('fotografije').getPublicUrl(path);
   await sb.from('dorade').update({[field]:data.publicUrl}).eq('id',id);
-  await loadAll(); alert('Slika sačuvana ✓');
+  await loadAll();
+  // odmah ponudi slanje majstoru (Viber/WhatsApp/...) — koristi tek snimljeni fajl
+  if(confirm('Slika sačuvana ✓\nPoslati je odmah majstoru (Viber / WhatsApp)?')) shareFoto(id,field,f);
+}
+// Proslijedi sliku + opis majstoru preko native share sheet-a (Viber/WhatsApp/...).
+async function shareFoto(id, field, fileObj){
+  const d=DATA.dorade.find(x=>x.id===id); if(!d) return;
+  const stan=DATA.stanovi.find(s=>s.id===d.stan_id)||{};
+  const text=[
+    `🛠️ Dorada — ${DATA.zgrada.naziv||''}`,
+    `Jedinica: ${stan.oznaka||''}${d.prostorija?' · '+d.prostorija:''}`,
+    d.detalj?`Problem: ${d.detalj}`:'',
+    d.opis?`Opis: ${d.opis}`:'',
+    `Prioritet: ${d.prioritet||'—'}${d.rok?' · Rok: '+d.rok:''}`
+  ].filter(Boolean).join('\n');
+  const url=d[field];
+  try{
+    let file=fileObj;
+    if(!file && url){ const r=await fetch(url); file=new File([await r.blob()], `dorada_${stan.oznaka||id}.jpg`, {type:'image/jpeg'}); }
+    if(file && navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({ files:[file], text }); return;       // slika + tekst -> izaberi Viber/WhatsApp
+    }
+    if(navigator.share){ await navigator.share({ text: text+(url?'\n'+url:'') }); return; }
+  }catch(e){ if(e.name==='AbortError') return; }                    // korisnik otkazao — ne idi dalje
+  // fallback (desktop / nema share API): WhatsApp link sa tekstom + linkom slike
+  window.open('https://wa.me/?text='+encodeURIComponent(text+(url?'\n'+url:'')), '_blank');
 }
 
 // ---------- ADMIN ----------
