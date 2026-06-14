@@ -72,6 +72,14 @@
   .zt td:nth-child(odd){background:var(--greybg);font-size:12px;width:22%}
   .zrow{margin:10px 0} .zgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
   .zsig{display:flex;justify-content:space-around;margin-top:46px;text-align:center;font-size:13px}
+  .ck{width:100%;border-collapse:collapse;margin:4px 0 10px;font-size:12px}
+  .ck th,.ck td{border:1px solid #999;padding:5px 6px}
+  .ck th{background:var(--greybg);font-size:11px}
+  .ck td:nth-child(2),.ck td:nth-child(3),.ck td:nth-child(4),
+  .ck th:nth-child(2),.ck th:nth-child(3),.ck th:nth-child(4){width:34px;text-align:center}
+  .ck .cnp{width:30%} .ck td:nth-child(5){min-width:120px}
+  .pgstan h2{text-align:center;font-size:16px;margin:0 0 6px}
+  .pgstan h3{font-size:12px;margin:12px 0 2px;color:var(--navy);text-transform:uppercase}
   @media print{ body>*:not(#zapisnik){display:none!important} .noprint{display:none!important}
     .zapisnik{position:absolute} .zdoc input,.zdoc textarea{border:none;padding:0} }
 </style>
@@ -252,6 +260,7 @@ function renderStanovi(){
   else if(stanFilter.startsWith('sprat:')){ const f=stanFilter.slice(6); list=list.filter(o=>String(o.s.sprat)===f); }
   const F=(k,l)=>`<button class="${stanFilter===k?'active':''}" onclick="setStanFilter('${k}')">${l}</button>`;
   let html=`<div class="filterbar">${F('all','Svi')}${F('nije','Nije spreman')}${F('ned','Nedostaci')}${F('spreman','Spremni')}${sprat.map(sp=>F('sprat:'+sp,'Sprat '+sp)).join('')}</div>`;
+  html+=`<div style="margin:0 0 10px"><button class="badge" style="background:var(--navy);color:#fff;padding:9px 14px" onclick="printChecklist('all')">🖨️ Štampaj prazne checkliste — svi stanovi (${DATA.stanovi.length})</button></div>`;
   html+=`<div class="card">${list.map(({s,st})=>`<div class="stan" onclick="openStan('${s.id}')">
       <div class="ozn">${s.oznaka}</div>
       <div class="meta">${s.sprat?('Sprat '+s.sprat):'—'} · ${s.kvadratura?s.kvadratura+' m²':'—'}
@@ -294,8 +303,9 @@ function renderStan(){
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div><b style="font-size:18px">${st.pct}%</b> završeno
         <span class="pill ${st.ready?'ok':'no'}" style="margin-left:6px">${st.ready?'Spreman':'Nije spreman'}</span></div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         <button class="badge" style="background:var(--greybg)" onclick="editStan('${s.id}')">⚙️ Podaci</button>
+        <button class="badge" style="background:var(--navy);color:#fff" onclick="printChecklist('${s.id}')">🖨️ Checklista</button>
         <button class="badge" style="background:var(--blue);color:#fff" onclick="renderZapisnik('${s.id}')">📄 Zapisnik</button>
       </div>
     </div>
@@ -421,6 +431,35 @@ function renderZapisnik(stanId){
   document.body.appendChild(ov);
 }
 function closeZapisnik(){ const z=document.getElementById('zapisnik'); if(z) z.remove(); }
+// ---------- PRAZNA CHECKLISTA ZA ŠTAMPU (radnik čekira ručno) ----------
+function printChecklist(which){
+  const stans = which==='all' ? DATA.stanovi : [DATA.stanovi.find(s=>s.id===which)];
+  let body='';
+  stans.forEach((s,idx)=>{
+    if(!s) return;
+    const appl=applicableStavke(s);
+    const rs=[...new Set(appl.map(x=>x.prostorija))];
+    body+=`<div class="pgstan" style="${idx<stans.length-1?'page-break-after:always':''}">
+      <h2>CHECKLISTA ZAVRŠNIH RADOVA</h2>
+      <table class="zt">
+        <tr><td>Zgrada</td><td>${DATA.zgrada.naziv||''}</td><td>Stan</td><td><b>${s.oznaka}</b></td></tr>
+        <tr><td>Sprat</td><td>${s.sprat||'—'}</td><td>Tip grijanja</td><td>${s.tip_grijanja||'—'}</td></tr>
+        <tr><td>Datum</td><td>______________</td><td>Pregledao</td><td>______________</td></tr>
+      </table>`;
+    rs.forEach(room=>{
+      const items=appl.filter(x=>x.prostorija===room);
+      body+=`<h3>${room}</h3><table class="ck"><tr><th class="cna">Stavka</th><th>OK</th><th>NE</th><th>N/P</th><th class="cnp">Napomena</th></tr>
+        ${items.map(it=>`<tr><td>${it.naziv}</td><td></td><td></td><td></td><td></td></tr>`).join('')}</table>`;
+    });
+    body+=`<div class="zsig"><div>Radnik (potpis)<br><br>__________________</div><div>Datum<br><br>__________________</div></div></div>`;
+  });
+  const ov=document.createElement('div'); ov.id='zapisnik'; ov.className='zapisnik';
+  ov.innerHTML=`<div class="znav noprint">
+     <button onclick="closeZapisnik()">‹ Zatvori</button>
+     <button class="zprint" onclick="window.print()">🖨️ Štampaj / Sačuvaj PDF</button>
+   </div><div class="zdoc">${body}</div>`;
+  document.body.appendChild(ov);
+}
 async function saveZapisnik(id){
   const patch={ kupac:val('z_kupac')||null, datum_primopredaje:val('z_datum')||null,
     brojilo_struja:val('z_struja')||null, brojilo_voda:val('z_voda')||null,
