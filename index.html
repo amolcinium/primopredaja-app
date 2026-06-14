@@ -42,6 +42,8 @@
   .sheet{background:#fff;width:100%;max-width:760px;margin:0 auto;border-radius:16px 16px 0 0;padding:18px;max-height:88vh;overflow:auto}
   .sheet h3{margin:0 0 10px} .opt{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0}
   .opt button{padding:14px;border-radius:9px;border:2px solid var(--line);font-weight:700;font-size:15px;background:#fff}
+  .pm{line-height:1.35} .pm small{display:block;font-weight:400;font-size:12px;color:var(--grey);margin-top:3px}
+  .pm.active{border-color:var(--blue);background:var(--blue);color:#fff} .pm.active small{color:#dbe7ff}
   .opt button.OK{color:var(--green)} .opt button.X{color:var(--red)}
   .opt button.DORADA{color:var(--orange)} .opt button.NP{color:var(--grey)}
   label{font-size:12px;color:var(--grey);display:block;margin:10px 0 3px}
@@ -163,7 +165,7 @@ async function loadAll(){
   const [st, sv, pr, dr, zg] = await Promise.all([
     sb.from('stanovi').select('*').order('redoslijed'),
     sb.from('stavke').select('*').order('redoslijed'),
-    sb.from('provjere').select('stan_id,stavka_id,status'),
+    sb.from('provjere').select('stan_id,stavka_id,status,napomena'),
     sb.from('dorade').select('*').order('datum_prijave',{ascending:false}),
     sb.from('zgrade').select('*').limit(1),
   ]);
@@ -260,7 +262,7 @@ function renderStanovi(){
   else if(stanFilter.startsWith('sprat:')){ const f=stanFilter.slice(6); list=list.filter(o=>String(o.s.sprat)===f); }
   const F=(k,l)=>`<button class="${stanFilter===k?'active':''}" onclick="setStanFilter('${k}')">${l}</button>`;
   let html=`<div class="filterbar">${F('all','Svi')}${F('nije','Nije spreman')}${F('ned','Nedostaci')}${F('spreman','Spremni')}${sprat.map(sp=>F('sprat:'+sp,'Sprat '+sp)).join('')}</div>`;
-  html+=`<div style="margin:0 0 10px"><button class="badge" style="background:var(--navy);color:#fff;padding:9px 14px" onclick="printChecklist('all')">🖨️ Štampaj prazne checkliste — svi stanovi (${DATA.stanovi.length})</button></div>`;
+  html+=`<div style="margin:0 0 10px"><button class="badge" style="background:var(--navy);color:#fff;padding:9px 14px" onclick="openPrintDialog('all')">🖨️ Štampaj checkliste — izbor stanova (${DATA.stanovi.length})</button></div>`;
   html+=`<div class="card">${list.map(({s,st})=>`<div class="stan" onclick="openStan('${s.id}')">
       <div class="ozn">${s.oznaka}</div>
       <div class="meta">${s.sprat?('Sprat '+s.sprat):'—'} · ${s.kvadratura?s.kvadratura+' m²':'—'}
@@ -305,7 +307,7 @@ function renderStan(){
         <span class="pill ${st.ready?'ok':'no'}" style="margin-left:6px">${st.ready?'Spreman':'Nije spreman'}</span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         <button class="badge" style="background:var(--greybg)" onclick="editStan('${s.id}')">⚙️ Podaci</button>
-        <button class="badge" style="background:var(--navy);color:#fff" onclick="printChecklist('${s.id}')">🖨️ Checklista</button>
+        <button class="badge" style="background:var(--navy);color:#fff" onclick="openPrintDialog('${s.id}')">🖨️ Checklista</button>
         <button class="badge" style="background:var(--blue);color:#fff" onclick="renderZapisnik('${s.id}')">📄 Zapisnik</button>
       </div>
     </div>
@@ -432,15 +434,68 @@ function renderZapisnik(stanId){
 }
 function closeZapisnik(){ const z=document.getElementById('zapisnik'); if(z) z.remove(); }
 // ---------- PRAZNA CHECKLISTA ZA ŠTAMPU (radnik čekira ručno) ----------
-function printChecklist(which){
-  const stans = which==='all' ? DATA.stanovi : [DATA.stanovi.find(s=>s.id===which)];
+// ---------- ŠTAMPA: izbor stanova + režim (prazno / sa podacima) ----------
+function openPrintDialog(preselect){
+  const pre = preselect==='all' ? DATA.stanovi.map(s=>s.id) : [preselect];
+  const sprat=[...new Set(DATA.stanovi.map(s=>s.sprat).filter(v=>v!==null&&v!==undefined&&v!==''))]
+    .sort((a,b)=>(''+a).localeCompare(''+b,undefined,{numeric:true}));
+  const m=document.createElement('div'); m.className='modal';
+  m.innerHTML=`<div class="sheet">
+    <h3>🖨️ Štampa checkliste</h3>
+    <label style="font-weight:600;font-size:13px;color:var(--grey)">Šta da štampam?</label>
+    <div class="opt">
+      <button id="pm_blank" class="pm active" onclick="pmSet('blank')">📝 Prazna polja<br><small>za ručnu kontrolu</small></button>
+      <button id="pm_data" class="pm" onclick="pmSet('data')">📊 Sa podacima<br><small>povuci trenutno stanje</small></button>
+    </div>
+    <label style="font-weight:600;font-size:13px;color:var(--grey)">Koje stanove?
+      <a onclick="pmAll(true)" style="color:var(--blue);cursor:pointer;font-weight:600">sve</a> ·
+      <a onclick="pmAll(false)" style="color:var(--blue);cursor:pointer;font-weight:600">nijedan</a>
+    </label>
+    ${sprat.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">
+      ${sprat.map(sp=>`<button type="button" class="filterbar" style="border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 11px;font-size:12px" onclick="pmFloor('${sp}')">Sprat ${sp}</button>`).join('')}</div>`:''}
+    <div id="pmlist" style="max-height:38vh;overflow:auto;border:1px solid var(--line);border-radius:9px;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:6px">
+      ${DATA.stanovi.map(s=>`<label style="display:flex;gap:7px;align-items:center;font-size:14px;padding:3px;cursor:pointer">
+        <input type="checkbox" class="pmck" value="${s.id}" data-sprat="${s.sprat||''}" ${pre.includes(s.id)?'checked':''} style="width:auto">
+        <span>${s.oznaka}${s.sprat?` <span class="muted">· ${s.sprat}</span>`:''}</span></label>`).join('')}
+    </div>
+    <button class="btn" onclick="doPrintChecklist()">Otvori za štampu / PDF</button>
+    <button class="btn ghost" onclick="closeModal()">Otkaži</button>
+  </div>`;
+  m.addEventListener('click',e=>{ if(e.target===m) closeModal(); });
+  document.body.appendChild(m);
+  window._pmMode='blank';
+}
+function pmSet(mode){ window._pmMode=mode;
+  document.getElementById('pm_blank').classList.toggle('active',mode==='blank');
+  document.getElementById('pm_data').classList.toggle('active',mode==='data'); }
+function pmAll(v){ document.querySelectorAll('.pmck').forEach(c=>c.checked=v); }
+function pmFloor(sp){ document.querySelectorAll('.pmck').forEach(c=>{ if(c.dataset.sprat===(''+sp)) c.checked=true; }); }
+function doPrintChecklist(){
+  const ids=[...document.querySelectorAll('.pmck:checked')].map(c=>+c.value);
+  if(!ids.length){ alert('Izaberi bar jedan stan.'); return; }
+  const mode=window._pmMode||'blank';
+  closeModal();
+  printChecklist(ids,mode);
+}
+function printChecklist(ids,mode){
+  mode=mode||'blank';
+  const stans = ids.map(id=>DATA.stanovi.find(s=>s.id===id)).filter(Boolean);
+  // za 'data' režim: mapa stavka_id -> {status, napomena} po stanu
+  const fill=(st)=>{ // vraća [ok, ne, np] ćelije
+    if(st==='OK') return ['✓','',''];
+    if(st==='X') return ['','✗',''];
+    if(st==='DORADA') return ['','🛠','']; // dorada = nije u redu, u toku
+    if(st==='N/P') return ['','','✓'];
+    return ['','',''];
+  };
   let body='';
   stans.forEach((s,idx)=>{
-    if(!s) return;
     const appl=applicableStavke(s);
     const rs=[...new Set(appl.map(x=>x.prostorija))];
+    let pmap={};
+    if(mode==='data') DATA.provjere.filter(p=>p.stan_id===s.id).forEach(p=>pmap[p.stavka_id]={s:p.status,n:p.napomena});
     body+=`<div class="pgstan" style="${idx<stans.length-1?'page-break-after:always':''}">
-      <h2>CHECKLISTA ZAVRŠNIH RADOVA</h2>
+      <h2>CHECKLISTA ZAVRŠNIH RADOVA${mode==='data'?' — STANJE':''}</h2>
       <table class="zt">
         <tr><td>Zgrada</td><td>${DATA.zgrada.naziv||''}</td><td>Stan</td><td><b>${s.oznaka}</b></td></tr>
         <tr><td>Sprat</td><td>${s.sprat||'—'}</td><td>Tip grijanja</td><td>${s.tip_grijanja||'—'}</td></tr>
@@ -449,7 +504,8 @@ function printChecklist(which){
     rs.forEach(room=>{
       const items=appl.filter(x=>x.prostorija===room);
       body+=`<h3>${room}</h3><table class="ck"><tr><th class="cna">Stavka</th><th>OK</th><th>NE</th><th>N/P</th><th class="cnp">Napomena</th></tr>
-        ${items.map(it=>`<tr><td>${it.naziv}</td><td></td><td></td><td></td><td></td></tr>`).join('')}</table>`;
+        ${items.map(it=>{ const pm=pmap[it.id]||{}; const c=mode==='data'?fill(pm.s):['','',''];
+          return `<tr><td>${it.naziv}</td><td>${c[0]}</td><td>${c[1]}</td><td>${c[2]}</td><td>${mode==='data'?(pm.n||''):''}</td></tr>`; }).join('')}</table>`;
     });
     body+=`<div class="zsig"><div>Radnik (potpis)<br><br>__________________</div><div>Datum<br><br>__________________</div></div></div>`;
   });
