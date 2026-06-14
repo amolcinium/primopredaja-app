@@ -430,7 +430,7 @@ function renderZapisnik(stanId){
    <div class="znav noprint">
      <button onclick="closeZapisnik()">‹ Zatvori</button>
      <button class="zsave" onclick="saveZapisnik('${stanId}')">Sačuvaj</button>
-     <button class="zprint" onclick="window.print()">🖨️ Štampaj / PDF</button>
+     <button class="zprint" onclick="printZapisnik()">🖨️ Štampaj / PDF</button>
    </div>
    <div class="zdoc">
      <h2>ZAPISNIK O PRIMOPREDAJI ${s.vrsta==='poslovni'?'POSLOVNOG PROSTORA':'STANA'}</h2>
@@ -455,8 +455,61 @@ function renderZapisnik(stanId){
   document.body.appendChild(ov);
 }
 function closeZapisnik(){ const z=document.getElementById('zapisnik'); if(z) z.remove(); }
-// ---------- PRAZNA CHECKLISTA ZA ŠTAMPU (radnik čekira ručno) ----------
-// ---------- ŠTAMPA: izbor stanova + režim (prazno / sa podacima) ----------
+// ====== ŠTAMPA: samostalni CSS + štampa preko skrivenog iframe-a (pouzdano, ne prazno) ======
+const PRINT_CSS = `
+*{box-sizing:border-box}
+.pdoc{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;font-size:12px;line-height:1.35}
+.pdoc .pg+.pg{page-break-before:always}
+.pdoc h2.pttl{text-align:center;font-size:16px;margin:0 0 4px}
+.pdoc .pleg{text-align:center;font-size:10px;color:#444;margin:0 0 8px}
+.pdoc table.pmeta{width:100%;border-collapse:collapse;margin:0 0 10px}
+.pdoc .pmeta td{border:1px solid #999;padding:5px;font-size:11px}
+.pdoc .pmeta td:nth-child(odd){background:#eef;width:18%;font-weight:600}
+.pdoc .psec{background:#1b2a4a;color:#fff;font-size:13px;font-weight:700;padding:5px 9px;margin:13px 0 0;text-transform:uppercase;letter-spacing:.4px}
+.pdoc .proom{background:#e8eefc;color:#1b2a4a;font-size:11px;font-weight:700;padding:4px 9px;margin:5px 0 2px;text-transform:uppercase}
+.pdoc table.ck{width:100%;border-collapse:collapse;margin:0 0 6px}
+.pdoc .ck th,.pdoc .ck td{border:1px solid #999;padding:5px 6px;font-size:11px;vertical-align:top}
+.pdoc .ck th{background:#eee} .pdoc .ck .c{width:30px;text-align:center} .pdoc .ck .cn{width:30%}
+.pdoc .ck tr{page-break-inside:avoid}
+.pdoc .psig{display:flex;justify-content:space-around;margin-top:28px;text-align:center;font-size:12px}
+.pdoc h3{font-size:12px;margin:12px 0 4px;border-bottom:1px solid #999;padding-bottom:3px}
+.pdoc table.zt{width:100%;border-collapse:collapse;margin:8px 0}
+.pdoc .zt td{border:1px solid #999;padding:5px;font-size:11px}
+.pdoc .zt td:nth-child(odd){background:#eef;width:18%}
+.pdoc .zrow{margin:8px 0} .pdoc .zrow label{font-size:11px;color:#444;display:block;margin-bottom:2px}
+.pdoc .zgrid{display:flex;gap:14px} .pdoc .zgrid>div{flex:1}
+.pdoc ol{margin:4px 0 4px 18px} .pdoc .zval{font-weight:600}
+`;
+function printHTML(inner){
+  let f=document.getElementById('pframe'); if(f) f.remove();
+  f=document.createElement('iframe'); f.id='pframe';
+  f.style.cssText='position:fixed;left:-9999px;top:0;width:820px;height:1100px;border:0';
+  document.body.appendChild(f);
+  const d=f.contentWindow.document;
+  d.open();
+  d.write('<!doctype html><html><head><meta charset="utf-8"><title>Štampa</title>'
+    +'<style>@page{margin:12mm}html,body{margin:0;background:#fff}'+PRINT_CSS+'</style></head>'
+    +'<body>'+inner+'</body></html>');
+  d.close();
+  let done=false;
+  const go=()=>{ if(done) return; done=true;
+    try{ f.contentWindow.focus(); f.contentWindow.print(); }
+    catch(e){ alert('Štampa nije uspjela: '+e.message); } };
+  f.onload=()=>setTimeout(go,300);
+  setTimeout(go,600); // fallback ako onload ne okine (neki browseri)
+}
+
+// ---------- grupisanje: KATEGORIJA (sekcija) -> POTKATEGORIJA (prostorija) -> stavke ----------
+const SECTION_MAP={
+  'ULAZ / HODNIK':'UNUTRAŠNJOST','DNEVNA / TRPEZARIJA':'UNUTRAŠNJOST','KUHINJA':'UNUTRAŠNJOST',
+  'SPAVAĆA SOBA':'UNUTRAŠNJOST','OSTAVA':'UNUTRAŠNJOST','PROSTOR':'UNUTRAŠNJOST',
+  'KUPATILO / WC':'SANITARIJE','KUPATILO 2 (MANJE)':'SANITARIJE','VODOVOD I SANITARIJE':'INSTALACIJE',
+  'TERASA / BALKON':'SPOLJAŠNJOST','ULAZ I IZLOG':'ULAZ / FASADA',
+  'GRIJANJE (podno)':'INSTALACIJE','GRIJANJE / KLIMA':'INSTALACIJE','ELEKTROINSTALACIJE':'INSTALACIJE',
+  'ZAVRŠNO / PREDAJA':'PRIMOPREDAJA'
+};
+const sectionOf=p=>SECTION_MAP[p]||'OSTALO';
+
 function openPrintDialog(preselect){
   const pre = preselect==='all' ? DATA.stanovi.map(s=>s.id) : [preselect];
   const sprat=[...new Set(DATA.stanovi.map(s=>s.sprat).filter(v=>v!==null&&v!==undefined&&v!==''))]
@@ -469,18 +522,24 @@ function openPrintDialog(preselect){
       <button id="pm_blank" class="pm active" onclick="pmSet('blank')">📝 Prazna polja<br><small>za ručnu kontrolu</small></button>
       <button id="pm_data" class="pm" onclick="pmSet('data')">📊 Sa podacima<br><small>povuci trenutno stanje</small></button>
     </div>
-    <label style="font-weight:600;font-size:13px;color:var(--grey)">Koje stanove?
+    <label style="font-weight:600;font-size:13px;color:var(--grey)">Uključi u štampu</label>
+    <div style="margin:4px 0 8px">
+      <label style="display:flex;gap:8px;align-items:center;font-size:14px;padding:3px 0"><input type="checkbox" id="pi_status" checked style="width:auto"> Status kolone (OK / NE / N/P)</label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:14px;padding:3px 0"><input type="checkbox" id="pi_nap" checked style="width:auto"> Napomene</label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:14px;padding:3px 0"><input type="checkbox" id="pi_issues" style="width:auto"> Samo stavke s nedostatkom (NE / dorada) <span class="muted">— sa podacima</span></label>
+    </div>
+    <label style="font-weight:600;font-size:13px;color:var(--grey)">Koje jedinice?
       <a onclick="pmAll(true)" style="color:var(--blue);cursor:pointer;font-weight:600">sve</a> ·
       <a onclick="pmAll(false)" style="color:var(--blue);cursor:pointer;font-weight:600">nijedan</a>
     </label>
     ${sprat.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">
       ${sprat.map(sp=>`<button type="button" class="filterbar" style="border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 11px;font-size:12px" onclick="pmFloor('${sp}')">Sprat ${sp}</button>`).join('')}</div>`:''}
-    <div id="pmlist" style="max-height:38vh;overflow:auto;border:1px solid var(--line);border-radius:9px;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:6px">
+    <div id="pmlist" style="max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:9px;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:6px">
       ${DATA.stanovi.map(s=>`<label style="display:flex;gap:7px;align-items:center;font-size:14px;padding:3px;cursor:pointer">
         <input type="checkbox" class="pmck" value="${s.id}" data-sprat="${s.sprat||''}" ${pre.includes(s.id)?'checked':''} style="width:auto">
-        <span>${s.oznaka}${s.sprat?` <span class="muted">· ${s.sprat}</span>`:''}</span></label>`).join('')}
+        <span>${s.oznaka}${s.vrsta==='poslovni'?' (PP)':''}${s.sprat?` <span class="muted">· ${s.sprat}</span>`:''}</span></label>`).join('')}
     </div>
-    <button class="btn" onclick="doPrintChecklist()">Otvori za štampu / PDF</button>
+    <button class="btn" onclick="doPrintChecklist()">🖨️ Štampaj / Sačuvaj PDF</button>
     <button class="btn ghost" onclick="closeModal()">Otkaži</button>
   </div>`;
   m.addEventListener('click',e=>{ if(e.target===m) closeModal(); });
@@ -494,49 +553,83 @@ function pmAll(v){ document.querySelectorAll('.pmck').forEach(c=>c.checked=v); }
 function pmFloor(sp){ document.querySelectorAll('.pmck').forEach(c=>{ if(c.dataset.sprat===(''+sp)) c.checked=true; }); }
 function doPrintChecklist(){
   const ids=[...document.querySelectorAll('.pmck:checked')].map(c=>+c.value);
-  if(!ids.length){ alert('Izaberi bar jedan stan.'); return; }
-  const mode=window._pmMode||'blank';
+  if(!ids.length){ alert('Izaberi bar jednu jedinicu.'); return; }
+  const opts={ mode:window._pmMode||'blank',
+    status:document.getElementById('pi_status').checked,
+    napomene:document.getElementById('pi_nap').checked,
+    issues:document.getElementById('pi_issues').checked };
   closeModal();
-  printChecklist(ids,mode);
+  printChecklist(ids,opts);
 }
-function printChecklist(ids,mode){
-  mode=mode||'blank';
+function printChecklist(ids,opts){
+  opts=opts||{}; const mode=opts.mode||'blank';
+  const showStatus = (mode==='blank') || opts.status!==false;
+  const showNap = opts.napomene!==false;
   const stans = ids.map(id=>DATA.stanovi.find(s=>s.id===id)).filter(Boolean);
-  // za 'data' režim: mapa stavka_id -> {status, napomena} po stanu
-  const fill=(st)=>{ // vraća [ok, ne, np] ćelije
-    if(st==='OK') return ['✓','',''];
-    if(st==='X') return ['','✗',''];
-    if(st==='DORADA') return ['','🛠','']; // dorada = nije u redu, u toku
-    if(st==='N/P') return ['','','✓'];
-    return ['','',''];
-  };
+  const fill=(st)=>{ if(st==='OK') return ['✓','','']; if(st==='X') return ['','✗',''];
+    if(st==='DORADA') return ['','🛠','']; if(st==='N/P') return ['','','✓']; return ['','','']; };
+  const ncol = 1 + (showStatus?3:0) + (showNap?1:0);
   let body='';
-  stans.forEach((s,idx)=>{
+  stans.forEach(s=>{
     const appl=applicableStavke(s);
-    const rs=[...new Set(appl.map(x=>x.prostorija))];
     let pmap={};
     if(mode==='data') DATA.provjere.filter(p=>p.stan_id===s.id).forEach(p=>pmap[p.stavka_id]={s:p.status,n:p.napomena});
-    body+=`<div class="pgstan" style="${idx<stans.length-1?'page-break-after:always':''}">
-      <h2>CHECKLISTA ZAVRŠNIH RADOVA${s.vrsta==='poslovni'?' — POSLOVNI PROSTOR':''}${mode==='data'?' — STANJE':''}</h2>
-      <table class="zt">
+    // poredak prostorija po redoslijedu, pa grupisanje u sekcije
+    const orderedRooms = rooms().filter(r=>appl.some(x=>x.prostorija===r));
+    const secList=[]; const secIdx={};
+    orderedRooms.forEach(r=>{ const sec=sectionOf(r);
+      if(!(sec in secIdx)){ secIdx[sec]={name:sec,rooms:[]}; secList.push(secIdx[sec]); }
+      secIdx[sec].rooms.push(r); });
+    let secHtml='';
+    secList.forEach(sec=>{
+      let roomsHtml='';
+      sec.rooms.forEach(room=>{
+        let items=appl.filter(x=>x.prostorija===room);
+        if(mode==='data'&&opts.issues) items=items.filter(it=>{ const st=(pmap[it.id]||{}).s; return st==='X'||st==='DORADA'; });
+        if(!items.length) return;
+        const head=`<tr><th>Stavka</th>${showStatus?'<th class="c">OK</th><th class="c">NE</th><th class="c">N/P</th>':''}${showNap?'<th class="cn">Napomena</th>':''}</tr>`;
+        const rowsH=items.map(it=>{ const pm=pmap[it.id]||{}; const c=(mode==='data')?fill(pm.s):['','',''];
+          const sc=showStatus?`<td class="c">${c[0]}</td><td class="c">${c[1]}</td><td class="c">${c[2]}</td>`:'';
+          const nc=showNap?`<td>${mode==='data'?(pm.n||''):''}</td>`:'';
+          return `<tr><td>${it.naziv}</td>${sc}${nc}</tr>`; }).join('');
+        roomsHtml+=`<div class="proom">${room}</div><table class="ck">${head}${rowsH}</table>`;
+      });
+      if(roomsHtml) secHtml+=`<div class="psec">${sec.name}</div>${roomsHtml}`;
+    });
+    if(!secHtml) secHtml=`<p style="font-size:12px">Nema stavki za prikaz u ovom filteru.</p>`;
+    body+=`<div class="pg">
+      <h2 class="pttl">CHECKLISTA ZAVRŠNIH RADOVA${s.vrsta==='poslovni'?' — POSLOVNI PROSTOR':''}${mode==='data'?' — STANJE':''}</h2>
+      ${mode==='data'?'<div class="pleg">✓ OK · ✗ nije u redu · 🛠 u doradi · N/P ne primjenjuje se</div>':''}
+      <table class="pmeta">
         <tr><td>Zgrada</td><td>${DATA.zgrada.naziv||''}</td><td>${s.vrsta==='poslovni'?'Lokal':'Stan'}</td><td><b>${s.oznaka}</b></td></tr>
         <tr><td>Kategorija</td><td>${s.kategorija||'—'}</td><td>Sprat</td><td>${s.sprat||'—'}</td></tr>
         <tr><td>${s.vrsta==='poslovni'?'Grijanje/klima':'Tip grijanja'}</td><td>${s.tip_grijanja||'—'}</td><td>Datum / Pregledao</td><td>____________</td></tr>
-      </table>`;
-    rs.forEach(room=>{
-      const items=appl.filter(x=>x.prostorija===room);
-      body+=`<h3>${room}</h3><table class="ck"><tr><th class="cna">Stavka</th><th>OK</th><th>NE</th><th>N/P</th><th class="cnp">Napomena</th></tr>
-        ${items.map(it=>{ const pm=pmap[it.id]||{}; const c=mode==='data'?fill(pm.s):['','',''];
-          return `<tr><td>${it.naziv}</td><td>${c[0]}</td><td>${c[1]}</td><td>${c[2]}</td><td>${mode==='data'?(pm.n||''):''}</td></tr>`; }).join('')}</table>`;
-    });
-    body+=`<div class="zsig"><div>Radnik (potpis)<br><br>__________________</div><div>Datum<br><br>__________________</div></div></div>`;
+      </table>
+      ${secHtml}
+      <div class="psig"><div>Radnik (potpis)<br><br>__________________</div><div>Datum<br><br>__________________</div></div>
+    </div>`;
   });
+  const inner=`<div class="pdoc">${body}</div>`;
+  window._printInner=inner;
+  // preview na ekranu + dugme za štampu (štampa ide kroz iframe, ne window.print)
   const ov=document.createElement('div'); ov.id='zapisnik'; ov.className='zapisnik';
   ov.innerHTML=`<div class="znav noprint">
      <button onclick="closeZapisnik()">‹ Zatvori</button>
-     <button class="zprint" onclick="window.print()">🖨️ Štampaj / Sačuvaj PDF</button>
-   </div><div class="zdoc">${body}</div>`;
+     <button class="zprint" onclick="printHTML(window._printInner)">🖨️ Štampaj / Sačuvaj PDF</button>
+   </div><div class="zdoc"><style>${PRINT_CSS}</style>${inner}</div>`;
   document.body.appendChild(ov);
+}
+// Štampa zapisnika o primopredaji (snapshot unijetih polja -> iframe)
+function printZapisnik(){
+  const doc=document.querySelector('#zapisnik .zdoc'); if(!doc) return;
+  const clone=doc.cloneNode(true);
+  const src=doc.querySelectorAll('input,textarea,select');
+  clone.querySelectorAll('input,textarea,select').forEach((c,i)=>{
+    const el=src[i]; const v=(el&&el.value)||'________';
+    const span=document.createElement('span'); span.className='zval'; span.textContent=v; c.replaceWith(span);
+  });
+  clone.querySelectorAll('style,.noprint').forEach(n=>n.remove());
+  printHTML('<div class="pdoc">'+clone.innerHTML+'</div>');
 }
 async function saveZapisnik(id){
   const patch={ kupac:val('z_kupac')||null, datum_primopredaje:val('z_datum')||null,
