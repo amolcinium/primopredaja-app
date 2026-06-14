@@ -69,7 +69,7 @@
 // Ne moraš editovati ovaj fajl — URL i ključ se unose u app-u (ekran Podešavanje)
 // i čuvaju u browseru (localStorage). Opciono: ubaci defaulte ovdje.
 let CFG = JSON.parse(localStorage.getItem('pp_cfg') || 'null')
-        || { url:"https://urlolneklnssstfmevzh.supabase.co", anon:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVybG9sbmVrbG5zc3N0Zm1ldnpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0Mzc1NDIsImV4cCI6MjA5NzAxMzU0Mn0.SIWvksJ6rCR_BcwUynP067mAI-9Qm19J84jyKaWnDIw", email:"ekipa@primopredaja.local" };
+        || { url:"https://gnezqcfeqsmyatifpusp.supabase.co", anon:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImduZXpxY2ZlcXNteWF0aWZwdXNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0Mzg2NjMsImV4cCI6MjA5NzAxNDY2M30.5lFPYqk5scZg5TysFI3wWhfHmV7cxH4YqOIV0Fq0NsM", email:"ekipa@primopredaja.local" };
 let sb = (CFG.url && CFG.anon) ? supabase.createClient(CFG.url, CFG.anon) : null;
 function SHARED_EMAIL(){ return CFG.email || "ekipa@primopredaja.local"; }
 // ===========================

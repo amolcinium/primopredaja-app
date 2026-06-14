@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .DS_Store
 .credentials.txt
+.prov_out.json
+.prov2.json
+.prov_state.json
