@@ -271,12 +271,21 @@ function pickStatus(stavkaId){
     <textarea id="np" rows="2" placeholder="npr. šta tačno fali">${note}</textarea>
     <label>Tvoje ime (opciono)</label>
     <input id="ime" placeholder="ko provjerava">
+    ${cur?`<button class="btn ghost" style="color:var(--red);border-color:var(--red)" onclick="resetStatus(${stavkaId})">↺ Poništi (vrati na neprovjereno)</button>`:''}
     <button class="btn ghost" onclick="closeModal()">Otkaži</button>
   </div>`;
   modal.onclick=e=>{ if(e.target===modal) closeModal(); };
   document.body.appendChild(modal);
 }
 function closeModal(){ const m=document.querySelector('.modal'); if(m) m.remove(); }
+async function resetStatus(stavkaId){
+  closeModal();
+  // ukloni auto-kreiranu doradu SAMO ako je netaknuta (status Otvoreno) — da ne briše započet rad
+  await sb.from('dorade').delete().eq('stan_id',curStan.id).eq('stavka_id',stavkaId).eq('status','Otvoreno');
+  const { error } = await sb.from('provjere').delete().eq('stan_id',curStan.id).eq('stavka_id',stavkaId);
+  if(error){ alert('Greška: '+error.message); return; }
+  await loadAll(); render();
+}
 async function setStatus(stavkaId,status){
   const napomena=(document.getElementById('np')||{}).value||null;
   const ime=(document.getElementById('ime')||{}).value||null;
