@@ -235,3 +235,21 @@ insert into stavke (id, prostorija, naziv, redoslijed) values
 (67,'ZAVRŠNO / PREDAJA','Ključevi kompletni i označeni',67),
 (68,'ZAVRŠNO / PREDAJA','Garantni listovi + uputstva spremni',68)
 on conflict (id) do update set prostorija=excluded.prostorija, naziv=excluded.naziv;
+
+-- ========== v2 dodaci: primjenjivost, zapisnik polja, realtime ==========
+alter table stavke  add column if not exists primjenjivost text default 'sve';  -- 'sve' | 'el' | 'vod'
+alter table stanovi add column if not exists kupac text;
+alter table stanovi add column if not exists brojilo_struja text;
+alter table stanovi add column if not exists brojilo_voda text;
+alter table stanovi add column if not exists broj_kljuceva text;
+alter table stanovi add column if not exists datum_primopredaje date;
+alter table stanovi add column if not exists napomena_primopredaja text;
+do $$
+declare t text;
+begin
+  foreach t in array array['provjere','dorade','stanovi','stavke'] loop
+    if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename=t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;

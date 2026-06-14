@@ -58,6 +58,22 @@
   .filterbar button{white-space:nowrap;border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 12px;font-size:13px}
   .filterbar button.active{background:var(--blue);color:#fff;border-color:var(--blue)}
   .empty{text-align:center;color:var(--grey);padding:30px 10px}
+  .rep{width:100%;border-collapse:collapse;font-size:13px}
+  .rep th,.rep td{border:1px solid var(--line);padding:6px 8px;text-align:center}
+  .rep th{background:var(--greybg)} .rep td:first-child,.rep th:first-child{text-align:left}
+  .rep .hot{background:var(--redbg);color:var(--red);font-weight:700}
+  .zapisnik{position:fixed;inset:0;background:#fff;z-index:100;overflow:auto}
+  .znav{position:sticky;top:0;background:var(--navy);display:flex;gap:8px;padding:10px}
+  .znav button{background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:6px;padding:8px 12px;font-size:14px}
+  .znav .zsave{background:var(--blue)} .znav .zprint{background:var(--green);margin-left:auto}
+  .zdoc{max-width:720px;margin:0 auto;padding:20px}
+  .zdoc h2{text-align:center;font-size:18px} .zdoc h3{font-size:14px;margin-top:18px;border-bottom:1px solid var(--line);padding-bottom:4px}
+  .zt{width:100%;border-collapse:collapse;margin:10px 0} .zt td{border:1px solid var(--line);padding:6px;font-size:13px}
+  .zt td:nth-child(odd){background:var(--greybg);font-size:12px;width:22%}
+  .zrow{margin:10px 0} .zgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .zsig{display:flex;justify-content:space-around;margin-top:46px;text-align:center;font-size:13px}
+  @media print{ body>*:not(#zapisnik){display:none!important} .noprint{display:none!important}
+    .zapisnik{position:absolute} .zdoc input,.zdoc textarea{border:none;padding:0} }
 </style>
 </head>
 <body>
@@ -80,15 +96,16 @@ function rooms(){ // kategorije (prostorije) dinamički iz baze, redom po redosl
 }
 const OPEN_STAT = s => s!=='Provjereno OK' && s!=='Odustalo';
 const app = document.getElementById('app');
-let DATA = { stanovi:[], stavke:[], provjere:[], dorade:[] };
-let view = 'dashboard', curStan = null, doradaFilter = 'open';
+let DATA = { stanovi:[], stavke:[], provjere:[], dorade:[], zgrada:{} };
+let view = 'dashboard', curStan = null, doradaFilter = 'open', stanFilter = 'all';
+let _rt=false, _rtTimer=null;
 
 // ---------- AUTH ----------
 async function init(){
   if(!sb){ renderSetup(); return; }
   const { data:{ session } } = await sb.auth.getSession();
   if(!session){ renderLogin(); return; }
-  await loadAll(); render();
+  await loadAll(); setupRealtime(); render();
 }
 function renderSetup(msg){
   app.innerHTML = `<div class="login card">
@@ -129,34 +146,47 @@ async function doLogin(){
   if(!code) return;
   const { error } = await sb.auth.signInWithPassword({ email:SHARED_EMAIL(), password:code });
   if(error){ renderLogin('Pogrešan kod.'); return; }
-  await loadAll(); render();
+  await loadAll(); setupRealtime(); render();
 }
 async function logout(){ await sb.auth.signOut(); renderLogin(); }
 
 // ---------- DATA ----------
 async function loadAll(){
-  const [st, sv, pr, dr] = await Promise.all([
+  const [st, sv, pr, dr, zg] = await Promise.all([
     sb.from('stanovi').select('*').order('redoslijed'),
     sb.from('stavke').select('*').order('redoslijed'),
     sb.from('provjere').select('stan_id,stavka_id,status'),
     sb.from('dorade').select('*').order('datum_prijave',{ascending:false}),
+    sb.from('zgrade').select('*').limit(1),
   ]);
-  DATA = { stanovi:st.data||[], stavke:sv.data||[], provjere:pr.data||[], dorade:dr.data||[] };
+  DATA = { stanovi:st.data||[], stavke:sv.data||[], provjere:pr.data||[], dorade:dr.data||[], zgrada:(zg.data&&zg.data[0])||{} };
 }
 function provFor(stanId){
   const m={}; DATA.provjere.filter(p=>p.stan_id===stanId).forEach(p=>m[p.stavka_id]=p.status); return m;
 }
+function tipKod(stan){ return stan&&stan.tip_grijanja==='Električno podno'?'el':stan&&stan.tip_grijanja==='Vodeno podno + kotao'?'vod':null; }
+function applicableStavke(stan){ const k=tipKod(stan);
+  return DATA.stavke.filter(s=>{ const p=s.primjenjivost||'sve'; return p==='sve' || !k || p===k; }); }
 function stanStats(stanId){
-  const m=provFor(stanId); const tot=DATA.stavke.length;
+  const s=DATA.stanovi.find(x=>x.id===stanId);
+  const m=provFor(stanId); const list=applicableStavke(s); const tot=list.length;
   let ok=0,np=0,x=0,dor=0;
-  DATA.stavke.forEach(s=>{ const v=m[s.id];
+  list.forEach(it=>{ const v=m[it.id];
     if(v==='OK')ok++; else if(v==='N/P')np++; else if(v==='X')x++; else if(v==='DORADA')dor++; });
   const appl = tot-np;
   const pct = appl>0 ? Math.round(ok/appl*100) : 0;
   const openDor = DATA.dorade.filter(d=>d.stan_id===stanId && OPEN_STAT(d.status)).length;
-  const ready = (ok+np===tot) && openDor===0;
+  const ready = tot>0 && (ok+np===tot) && openDor===0;
   return { pct, x, dor, openDor, ready, checked: ok+np+x+dor };
 }
+function setupRealtime(){
+  if(_rt||!sb) return; _rt=true;
+  sb.channel('pp-rt').on('postgres_changes',{event:'*',schema:'public'},()=>scheduleRefresh()).subscribe();
+}
+function scheduleRefresh(){ clearTimeout(_rtTimer); _rtTimer=setTimeout(async()=>{
+  if(document.querySelector('.modal')||document.getElementById('zapisnik')) return; // ne ometaj unos u toku
+  await loadAll(); render();
+},800); }
 
 // ---------- RENDER ----------
 function chrome(title, back){
@@ -168,7 +198,7 @@ function chrome(title, back){
   </header><div class="wrap" id="content"></div>` + tabbar();
 }
 function tabbar(){
-  const T=[['dashboard','📊','Pregled'],['stanovi','🏢','Stanovi'],['dorade','🛠️','Dorade']];
+  const T=[['dashboard','📊','Pregled'],['stanovi','🏢','Stanovi'],['dorade','🛠️','Dorade'],['izvodaci','👷','Izvođači']];
   return `<div class="tabbar">${T.map(([v,i,l])=>
     `<button class="${view===v&&!curStan?'active':''}" onclick="nav('${v}')"><span class="ic">${i}</span>${l}</button>`).join('')}</div>`;
 }
@@ -176,7 +206,8 @@ function render(){
   if(curStan){ renderStan(); return; }
   if(view==='dashboard') renderDashboard();
   else if(view==='stanovi') renderStanovi();
-  else renderDorade();
+  else if(view==='dorade') renderDorade();
+  else renderIzvodaci();
 }
 function nav(v){ view=v; curStan=null; render(); }
 function goBack(){ curStan=null; render(); }
@@ -213,15 +244,44 @@ function renderDashboard(){
 function renderStanovi(){
   app.innerHTML = chrome('Stanovi', false);
   const c=document.getElementById('content');
-  c.innerHTML = `<div class="card">${DATA.stanovi.map(s=>{
-    const st=stanStats(s.id);
-    return `<div class="stan" onclick="openStan('${s.id}')">
+  const sprat=[...new Set(DATA.stanovi.map(s=>s.sprat).filter(Boolean))].sort();
+  let list=DATA.stanovi.map(s=>({s,st:stanStats(s.id)}));
+  if(stanFilter==='nije') list=list.filter(o=>!o.st.ready);
+  else if(stanFilter==='ned') list=list.filter(o=>o.st.openDor>0);
+  else if(stanFilter==='spreman') list=list.filter(o=>o.st.ready);
+  else if(stanFilter.startsWith('sprat:')){ const f=stanFilter.slice(6); list=list.filter(o=>String(o.s.sprat)===f); }
+  const F=(k,l)=>`<button class="${stanFilter===k?'active':''}" onclick="setStanFilter('${k}')">${l}</button>`;
+  let html=`<div class="filterbar">${F('all','Svi')}${F('nije','Nije spreman')}${F('ned','Nedostaci')}${F('spreman','Spremni')}${sprat.map(sp=>F('sprat:'+sp,'Sprat '+sp)).join('')}</div>`;
+  html+=`<div class="card">${list.map(({s,st})=>`<div class="stan" onclick="openStan('${s.id}')">
       <div class="ozn">${s.oznaka}</div>
       <div class="meta">${s.sprat?('Sprat '+s.sprat):'—'} · ${s.kvadratura?s.kvadratura+' m²':'—'}
         ${st.openDor?` · <span style="color:var(--red)">🛠️ ${st.openDor}</span>`:''}</div>
       <div class="pct" style="color:${st.pct===100?'var(--green)':'var(--navy)'}">${st.pct}%</div>
       <span class="pill ${st.ready?'ok':'no'}">${st.ready?'Spreman':'—'}</span>
-    </div>`;}).join('')}</div>`;
+    </div>`).join('')||'<div class="empty">Nema stanova u ovom filteru.</div>'}</div>`;
+  c.innerHTML=html;
+}
+function setStanFilter(k){ stanFilter=k; renderStanovi(); }
+function renderIzvodaci(){
+  app.innerHTML = chrome('Izvođači', false);
+  const c=document.getElementById('content');
+  const today=new Date().toISOString().slice(0,10); const map={};
+  DATA.dorade.forEach(d=>{ const k=d.izvodjac||'(nedodijeljeno)';
+    const o=map[k]||(map[k]={izv:k,open:0,late:0,closed:0,days:[]});
+    if(OPEN_STAT(d.status)){ o.open++; if(d.rok&&d.rok<today) o.late++; }
+    if(d.status==='Provjereno OK'){ o.closed++;
+      if(d.datum_prijave&&d.datum_zatvaranja) o.days.push((new Date(d.datum_zatvaranja)-new Date(d.datum_prijave))/86400000); }
+  });
+  const rows=Object.values(map).sort((a,b)=>b.open-a.open);
+  if(!rows.length){ c.innerHTML='<div class="empty">Još nema evidentiranih dorada / izvođača.</div>'; return; }
+  c.innerHTML=`<div class="card"><table class="rep">
+    <tr><th>Izvođač</th><th>Otvor.</th><th>Probij. rok</th><th>Zatvor.</th><th>Pros. dana</th></tr>
+    ${rows.map(o=>`<tr><td>${o.izv}</td>
+      <td class="${o.open?'hot':''}">${o.open}</td>
+      <td class="${o.late?'hot':''}">${o.late}</td>
+      <td>${o.closed}</td>
+      <td>${o.days.length?(o.days.reduce((a,b)=>a+b,0)/o.days.length).toFixed(1):'—'}</td></tr>`).join('')}
+  </table></div>`;
 }
 
 function openStan(id){ curStan=DATA.stanovi.find(s=>s.id===id); render(); }
@@ -234,14 +294,18 @@ function renderStan(){
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div><b style="font-size:18px">${st.pct}%</b> završeno
         <span class="pill ${st.ready?'ok':'no'}" style="margin-left:6px">${st.ready?'Spreman':'Nije spreman'}</span></div>
-      <button class="badge" style="background:var(--greybg)" onclick="editStan('${s.id}')">⚙️ Podaci</button>
+      <div style="display:flex;gap:6px">
+        <button class="badge" style="background:var(--greybg)" onclick="editStan('${s.id}')">⚙️ Podaci</button>
+        <button class="badge" style="background:var(--blue);color:#fff" onclick="renderZapisnik('${s.id}')">📄 Zapisnik</button>
+      </div>
     </div>
     <div class="bar" style="margin-top:8px"><i style="width:${st.pct}%"></i></div>
     <div class="muted" style="margin-top:6px">Tip grijanja: <b>${s.tip_grijanja||'nije postavljen'}</b>
       · Otvorenih dorada: <b style="color:${open.length?'var(--red)':'inherit'}">${open.length}</b></div>
   </div>`;
+  const appl=applicableStavke(s);
   rooms().forEach(room=>{
-    const items=DATA.stavke.filter(x=>x.prostorija===room);
+    const items=appl.filter(x=>x.prostorija===room);
     if(!items.length) return;
     html+=`<div class="room">${room}</div>`;
     items.forEach(it=>{
@@ -323,6 +387,48 @@ async function saveStan(id){
   await loadAll(); if(curStan&&curStan.id===id) curStan={...curStan,...patch}; render();
 }
 const val=id=>{ const e=document.getElementById(id); return e?e.value.trim():''; };
+
+// ---------- ZAPISNIK O PRIMOPREDAJI ----------
+function renderZapisnik(stanId){
+  const s=DATA.stanovi.find(x=>x.id===stanId); const st=stanStats(stanId);
+  const open=DATA.dorade.filter(d=>d.stan_id===stanId && OPEN_STAT(d.status));
+  const ov=document.createElement('div'); ov.id='zapisnik'; ov.className='zapisnik';
+  ov.innerHTML=`
+   <div class="znav noprint">
+     <button onclick="closeZapisnik()">‹ Zatvori</button>
+     <button class="zsave" onclick="saveZapisnik('${stanId}')">Sačuvaj</button>
+     <button class="zprint" onclick="window.print()">🖨️ Štampaj / PDF</button>
+   </div>
+   <div class="zdoc">
+     <h2>ZAPISNIK O PRIMOPREDAJI STANA</h2>
+     <table class="zt">
+       <tr><td>Zgrada</td><td>${DATA.zgrada.naziv||''}</td><td>Stan</td><td><b>${s.oznaka}</b></td></tr>
+       <tr><td>Sprat</td><td>${s.sprat||'—'}</td><td>Kvadratura</td><td>${s.kvadratura?s.kvadratura+' m²':'—'}</td></tr>
+       <tr><td>Tip grijanja</td><td>${s.tip_grijanja||'—'}</td><td>Završenost</td><td>${st.pct}%</td></tr>
+     </table>
+     <div class="zrow"><label>Kupac</label><input id="z_kupac" value="${s.kupac||''}"></div>
+     <div class="zrow"><label>Datum primopredaje</label><input id="z_datum" type="date" value="${s.datum_primopredaje||''}"></div>
+     <div class="zgrid">
+       <div><label>Brojilo struje</label><input id="z_struja" value="${s.brojilo_struja||''}"></div>
+       <div><label>Brojilo vode</label><input id="z_voda" value="${s.brojilo_voda||''}"></div>
+       <div><label>Predato ključeva</label><input id="z_kljuc" value="${s.broj_kljuceva||''}"></div>
+     </div>
+     <h3>Otvoreni nedostaci na dan primopredaje (${open.length})</h3>
+     ${open.length?('<ol>'+open.map(d=>`<li>${d.prostorija?d.prostorija+' — ':''}${d.detalj||d.opis||''} <i>(${d.status}${d.izvodjac?', '+d.izvodjac:''})</i></li>`).join('')+'</ol>'):'<p>Nema otvorenih nedostataka. ✓</p>'}
+     <div class="zrow"><label>Napomena</label><textarea id="z_nap" rows="2">${s.napomena_primopredaja||''}</textarea></div>
+     <div class="zsig"><div>Kupac<br><br>______________________</div><div>Izvođač / Investitor<br><br>______________________</div></div>
+   </div>`;
+  document.body.appendChild(ov);
+}
+function closeZapisnik(){ const z=document.getElementById('zapisnik'); if(z) z.remove(); }
+async function saveZapisnik(id){
+  const patch={ kupac:val('z_kupac')||null, datum_primopredaje:val('z_datum')||null,
+    brojilo_struja:val('z_struja')||null, brojilo_voda:val('z_voda')||null,
+    broj_kljuceva:val('z_kljuc')||null, napomena_primopredaja:val('z_nap')||null };
+  const { error }=await sb.from('stanovi').update(patch).eq('id',id);
+  if(error){ alert('Greška: '+error.message); return; }
+  await loadAll(); alert('Sačuvano ✓');
+}
 
 // ---------- DORADE ----------
 function renderDorade(){
@@ -422,14 +528,24 @@ async function openAdmin(){
     <label>Checklista — kategorije i stavke (${DATA.stavke.length})</label>
     <div id="admStav" style="max-height:30vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px">
       ${rooms().map(room=>`<div style="font-weight:700;color:var(--navy);font-size:12px;margin:6px 0 2px">${room}</div>`+
-        DATA.stavke.filter(s=>s.prostorija===room).map(s=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 4px;border-bottom:1px solid var(--line)">
-          <span style="font-size:13px">${s.naziv}</span>
+        DATA.stavke.filter(s=>s.prostorija===room).map(s=>`<div style="display:flex;gap:6px;align-items:center;padding:3px 4px;border-bottom:1px solid var(--line)">
+          <span style="font-size:13px;flex:1">${s.naziv}</span>
+          <select onchange="setPrimjenjivost(${s.id},this.value)" style="font-size:11px;padding:2px;width:auto" title="primjenjivost">
+            <option value="sve" ${(s.primjenjivost||'sve')==='sve'?'selected':''}>sve</option>
+            <option value="el" ${s.primjenjivost==='el'?'selected':''}>el</option>
+            <option value="vod" ${s.primjenjivost==='vod'?'selected':''}>vod</option>
+          </select>
           <button class="badge" style="background:var(--redbg);color:var(--red)" onclick="delStavka(${s.id})">×</button>
         </div>`).join('')).join('')}
     </div>
     <label>Dodaj stavku — upiši novu ILI postojeću kategoriju</label>
     <input id="new_pros" list="roomlist" placeholder="kategorija (npr. KUHINJA ili nova)">
     <datalist id="roomlist">${rooms().map(r=>`<option value="${r}">`).join('')}</datalist>
+    <select id="new_prim" style="margin-top:6px">
+      <option value="sve">važi za sve stanove</option>
+      <option value="el">samo električno grijanje</option>
+      <option value="vod">samo vodeno grijanje</option>
+    </select>
     <div style="display:flex;gap:8px;margin-top:6px">
       <input id="new_stav" placeholder="naziv stavke / detalja za provjeru">
       <button class="badge" style="background:var(--green);color:#fff;padding:0 16px" onclick="addStavka()">+ Dodaj</button>
@@ -461,13 +577,19 @@ async function delStan(id,ozn){
 }
 async function addStavka(){
   const pros=val('new_pros'), naziv=val('new_stav'); if(!pros||!naziv){ alert('Unesi kategoriju i naziv.'); return; }
+  const prim=val('new_prim')||'sve';
   const nid=(DATA.stavke.length?Math.max(...DATA.stavke.map(s=>s.id)):0)+1;
   const inCat=DATA.stavke.filter(s=>s.prostorija===pros);
   const red=inCat.length ? Math.max(...inCat.map(s=>s.redoslijed))+1
                          : (DATA.stavke.length?Math.max(...DATA.stavke.map(s=>s.redoslijed)):0)+1;
-  const { error }=await sb.from('stavke').insert({id:nid,prostorija:pros,naziv,redoslijed:red});
+  const { error }=await sb.from('stavke').insert({id:nid,prostorija:pros,naziv,redoslijed:red,primjenjivost:prim});
   if(error){ alert('Greška: '+error.message); return; }
   closeModal(); await loadAll(); openAdmin();
+}
+async function setPrimjenjivost(id,v){
+  const { error }=await sb.from('stavke').update({primjenjivost:v}).eq('id',id);
+  if(error){ alert('Greška: '+error.message); return; }
+  await loadAll();
 }
 async function delStavka(id){
   if(!confirm('Obrisati ovu stavku iz checkliste SVIH stanova? Briše i njene provjere/dorade.')) return;
