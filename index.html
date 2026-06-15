@@ -480,23 +480,43 @@ const PRINT_CSS = `
 .pdoc .zgrid{display:flex;gap:14px} .pdoc .zgrid>div{flex:1}
 .pdoc ol{margin:4px 0 4px 18px} .pdoc .zval{font-weight:600}
 `;
+function buildPrintDoc(inner){
+  return '<!doctype html><html lang="sr"><head><meta charset="utf-8">'
+    +'<meta name="viewport" content="width=device-width,initial-scale=1">'
+    +'<title>Checklista — štampa</title><style>'
+    +'@page{margin:12mm} html,body{margin:0;background:#fff} body{padding:16px;color:#111}'
+    +PRINT_CSS
+    +'.tbar{position:sticky;top:0;display:flex;gap:8px;background:#1b2a4a;padding:10px;margin:-16px -16px 16px;z-index:5}'
+    +'.tbar button{background:#2ecc71;color:#fff;border:0;border-radius:7px;padding:11px 16px;font-size:15px;font-weight:700;cursor:pointer}'
+    +'.tbar button.sec{background:rgba(255,255,255,.22)}'
+    +'@media print{.tbar{display:none!important} body{padding:0}}'
+    +'</style></head><body>'
+    +'<div class="tbar"><button onclick="window.print()">🖨️ Štampaj / Sačuvaj PDF</button>'
+    +'<button class="sec" onclick="window.close()">Zatvori</button></div>'
+    +inner
+    +'</body></html>';
+}
+// Otvori sadržaj kao PRAVU stranicu u novom tabu (najpouzdanije za štampu/PDF, desktop+mobilni).
 function printHTML(inner){
-  let f=document.getElementById('pframe'); if(f) f.remove();
-  f=document.createElement('iframe'); f.id='pframe';
-  f.style.cssText='position:fixed;left:-9999px;top:0;width:820px;height:1100px;border:0';
-  document.body.appendChild(f);
-  const d=f.contentWindow.document;
-  d.open();
-  d.write('<!doctype html><html><head><meta charset="utf-8"><title>Štampa</title>'
-    +'<style>@page{margin:12mm}html,body{margin:0;background:#fff}'+PRINT_CSS+'</style></head>'
-    +'<body>'+inner+'</body></html>');
-  d.close();
-  let done=false;
-  const go=()=>{ if(done) return; done=true;
-    try{ f.contentWindow.focus(); f.contentWindow.print(); }
-    catch(e){ alert('Štampa nije uspjela: '+e.message); } };
-  f.onload=()=>setTimeout(go,300);
-  setTimeout(go,600); // fallback ako onload ne okine (neki browseri)
+  const doc=buildPrintDoc(inner);
+  const w=window.open('','_blank');
+  if(w && w.document){
+    w.document.open(); w.document.write(doc); w.document.close();
+    setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 500); // auto-print; dugme je rezerva
+    return;
+  }
+  // pop-up blokiran -> fullscreen iframe u istoj stranici (vidljiv, sa svojim dugmetom)
+  let wrap=document.getElementById('pwrap'); if(wrap) wrap.remove();
+  wrap=document.createElement('div'); wrap.id='pwrap';
+  wrap.style.cssText='position:fixed;inset:0;z-index:9999;background:#fff';
+  const x=document.createElement('button'); x.textContent='✕';
+  x.style.cssText='position:fixed;top:10px;right:10px;z-index:10000;background:#1b2a4a;color:#fff;border:0;border-radius:8px;width:38px;height:38px;font-size:18px';
+  x.onclick=()=>wrap.remove();
+  const f=document.createElement('iframe');
+  f.style.cssText='width:100%;height:100%;border:0';
+  wrap.appendChild(f); wrap.appendChild(x); document.body.appendChild(wrap);
+  const d=f.contentWindow.document; d.open(); d.write(doc); d.close();
+  setTimeout(()=>{ try{ f.contentWindow.focus(); f.contentWindow.print(); }catch(e){} }, 500);
 }
 
 // ---------- grupisanje: KATEGORIJA (sekcija) -> POTKATEGORIJA (prostorija) -> stavke ----------
@@ -609,15 +629,7 @@ function printChecklist(ids,opts){
       <div class="psig"><div>Radnik (potpis)<br><br>__________________</div><div>Datum<br><br>__________________</div></div>
     </div>`;
   });
-  const inner=`<div class="pdoc">${body}</div>`;
-  window._printInner=inner;
-  // preview na ekranu + dugme za štampu (štampa ide kroz iframe, ne window.print)
-  const ov=document.createElement('div'); ov.id='zapisnik'; ov.className='zapisnik';
-  ov.innerHTML=`<div class="znav noprint">
-     <button onclick="closeZapisnik()">‹ Zatvori</button>
-     <button class="zprint" onclick="printHTML(window._printInner)">🖨️ Štampaj / Sačuvaj PDF</button>
-   </div><div class="zdoc"><style>${PRINT_CSS}</style>${inner}</div>`;
-  document.body.appendChild(ov);
+  printHTML(`<div class="pdoc">${body}</div>`);
 }
 // Štampa zapisnika o primopredaji (snapshot unijetih polja -> iframe)
 function printZapisnik(){
