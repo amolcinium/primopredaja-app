@@ -35,9 +35,9 @@
   .s.DORADA{background:var(--orangebg);color:var(--orange)} .s.NP{background:var(--greybg);color:var(--grey)}
   .s.none{background:#fff;color:#bbb;border:1px dashed #ccc}
   .tabbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);
-    display:flex;z-index:10} .tabbar button{flex:1;border:0;background:none;padding:10px 0;font-size:12px;color:var(--grey)}
+    display:flex;z-index:10} .tabbar button{flex:1;border:0;background:none;padding:8px 0 7px;font-size:10px;color:var(--grey);line-height:1.1}
   .tabbar button.active{color:var(--blue);font-weight:700}
-  .tabbar .ic{font-size:20px;display:block}
+  .tabbar .ic{font-size:19px;display:block;margin-bottom:2px}
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;z-index:50}
   .sheet{background:#fff;width:100%;max-width:760px;margin:0 auto;border-radius:16px 16px 0 0;padding:18px;max-height:88vh;overflow:auto}
   .sheet h3{margin:0 0 10px} .opt{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0}
@@ -111,7 +111,7 @@ function rooms(){ // kategorije (prostorije) dinamički iz baze, redom po redosl
 }
 const OPEN_STAT = s => s!=='Provjereno OK' && s!=='Odustalo';
 const app = document.getElementById('app');
-let DATA = { stanovi:[], stavke:[], provjere:[], dorade:[], zgrada:{} };
+let DATA = { stanovi:[], stavke:[], provjere:[], dorade:[], zgrada:{}, izvodjaci:[], zadaci:[], dnevnik:[] };
 let view = 'dashboard', curStan = null, doradaFilter = 'open', stanFilter = 'all';
 let _rt=false, _rtTimer=null;
 
@@ -166,16 +166,27 @@ async function doLogin(){
 async function logout(){ await sb.auth.signOut(); renderLogin(); }
 
 // ---------- DATA ----------
+const FAZE=['Grubi radovi','Instalacije','Mašinski','Završni radovi','Čišćenje','Spremno'];
 async function loadAll(){
-  const [st, sv, pr, dr, zg] = await Promise.all([
+  const [st, sv, pr, dr, zg, iz, za, dn] = await Promise.all([
     sb.from('stanovi').select('*').order('redoslijed'),
     sb.from('stavke').select('*').order('redoslijed'),
     sb.from('provjere').select('stan_id,stavka_id,status,napomena'),
     sb.from('dorade').select('*').order('datum_prijave',{ascending:false}),
     sb.from('zgrade').select('*').limit(1),
+    sb.from('izvodjaci').select('*').order('ime'),
+    sb.from('zadaci').select('*').order('created_at',{ascending:false}),
+    sb.from('dnevnik').select('*').order('datum',{ascending:false}),
   ]);
-  DATA = { stanovi:st.data||[], stavke:sv.data||[], provjere:pr.data||[], dorade:dr.data||[], zgrada:(zg.data&&zg.data[0])||{} };
+  DATA = { stanovi:st.data||[], stavke:sv.data||[], provjere:pr.data||[], dorade:dr.data||[],
+    zgrada:(zg.data&&zg.data[0])||{}, izvodjaci:iz.data||[], zadaci:za.data||[], dnevnik:dn.data||[] };
 }
+function izvName(id){ const i=DATA.izvodjaci.find(x=>x.id===id); return i?i.ime:''; }
+function izvByName(name){ return DATA.izvodjaci.find(x=>x.ime===name); }
+// telefon -> međunarodni format za wa.me (MNE default +382, skida 0/space/-)
+function waNum(tel){ if(!tel) return ''; let t=(''+tel).replace(/[^0-9+]/g,'');
+  if(t.startsWith('+')) return t.slice(1); if(t.startsWith('00')) return t.slice(2);
+  if(t.startsWith('0')) return '382'+t.slice(1); if(t.startsWith('382')) return t; return '382'+t; }
 function provFor(stanId){
   const m={}; DATA.provjere.filter(p=>p.stan_id===stanId).forEach(p=>m[p.stavka_id]=p.status); return m;
 }
@@ -215,7 +226,7 @@ function chrome(title, back){
   </header><div class="wrap" id="content"></div>` + tabbar();
 }
 function tabbar(){
-  const T=[['dashboard','📊','Pregled'],['stanovi','🏢','Stanovi'],['dorade','🛠️','Dorade'],['izvodaci','👷','Izvođači']];
+  const T=[['dashboard','📊','Pregled'],['stanovi','🏢','Stanovi'],['zadaci','📋','Zadaci'],['dorade','🛠️','Dorade'],['dnevnik','📒','Dnevnik'],['izvodaci','👷','Izvođači']];
   return `<div class="tabbar">${T.map(([v,i,l])=>
     `<button class="${view===v&&!curStan?'active':''}" onclick="nav('${v}')"><span class="ic">${i}</span>${l}</button>`).join('')}</div>`;
 }
@@ -223,7 +234,9 @@ function render(){
   if(curStan){ renderStan(); return; }
   if(view==='dashboard') renderDashboard();
   else if(view==='stanovi') renderStanovi();
+  else if(view==='zadaci') renderZadaci();
   else if(view==='dorade') renderDorade();
+  else if(view==='dnevnik') renderDnevnik();
   else renderIzvodaci();
 }
 function nav(v){ view=v; curStan=null; render(); }
@@ -241,7 +254,17 @@ function renderDashboard(){
   const odo = DATA.dorade.filter(d=>OPEN_STAT(d.status)).length;
   const crit = DATA.dorade.filter(d=>OPEN_STAT(d.status)&&d.prioritet==='Kritičan').length;
   const predato = DATA.stanovi.filter(s=>s.status_primopredaje==='Primopredato').length;
+  const otvZad = DATA.zadaci.filter(z=>z.status!=='Završen'&&z.status!=='Otkazan').length;
   const K=(n,l,col)=>`<div class="kpi"><div class="n" style="color:${col}">${n}</div><div class="l">${l}</div></div>`;
+  // faze breakdown
+  const fazaCnt={}; FAZE.forEach(f=>fazaCnt[f]=0);
+  DATA.stanovi.forEach(s=>{ const f=s.faza||'Grubi radovi'; fazaCnt[f]=(fazaCnt[f]||0)+1; });
+  const fazaCol=f=>({'Grubi radovi':'#9aa3af','Instalacije':'#e07b00','Mašinski':'#e07b00','Završni radovi':'#2E5395','Čišćenje':'#2E5395','Spremno':'#2e7d32'}[f]||'#9aa3af');
+  const fazaBar=FAZE.filter(f=>fazaCnt[f]>0).map(f=>`<div onclick="nav('stanovi');setTimeout(()=>setStanFilter('faza:${f}'),0)" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:5px 0">
+      <span style="width:11px;height:11px;border-radius:3px;background:${fazaCol(f)};flex:0 0 auto"></span>
+      <span style="flex:1;font-size:13px">${f}</span>
+      <b>${fazaCnt[f]}</b>
+      <span style="width:90px;height:7px;background:var(--greybg);border-radius:5px;overflow:hidden"><i style="display:block;height:100%;width:${ukupno?Math.round(fazaCnt[f]/ukupno*100):0}%;background:${fazaCol(f)}"></i></span></div>`).join('');
   c.innerHTML = `
     <div class="card"><div class="l" style="color:var(--grey);font-size:12px">UKUPNA ZAVRŠENOST OBJEKTA</div>
       <div style="font-size:34px;font-weight:800;color:var(--blue)">${avg}%</div>
@@ -253,9 +276,11 @@ function renderDashboard(){
       ${K(nije,'Nije počelo','var(--grey)')}
       ${K(odo,'Otvorene dorade','var(--red)')}
       ${K(crit,'Kritične dorade','var(--red)')}
-      ${K(predato,'Primopredato kupcu','var(--green)')}
-      ${K(DATA.dorade.length,'Dorada ukupno','var(--navy)')}
-    </div>`;
+      ${K(otvZad,'Otvoreni zadaci','var(--orange)')}
+      ${K(predato,'Primopredato','var(--green)')}
+    </div>
+    <div class="card"><div class="l" style="color:var(--grey);font-size:12px;margin-bottom:4px">FAZE RADOVA (klik = filtriraj stanove)</div>
+      ${fazaBar||'<div class="muted">—</div>'}</div>`;
 }
 
 function renderStanovi(){
@@ -267,13 +292,18 @@ function renderStanovi(){
   else if(stanFilter==='ned') list=list.filter(o=>o.st.openDor>0);
   else if(stanFilter==='spreman') list=list.filter(o=>o.st.ready);
   else if(stanFilter.startsWith('sprat:')){ const f=stanFilter.slice(6); list=list.filter(o=>String(o.s.sprat)===f); }
+  else if(stanFilter.startsWith('faza:')){ const f=stanFilter.slice(5); list=list.filter(o=>(o.s.faza||'Grubi radovi')===f); }
   const F=(k,l)=>`<button class="${stanFilter===k?'active':''}" onclick="setStanFilter('${k}')">${l}</button>`;
+  const fazaUsed=FAZE.filter(f=>DATA.stanovi.some(s=>(s.faza||'Grubi radovi')===f));
   let html=`<div class="filterbar">${F('all','Svi')}${F('nije','Nije spreman')}${F('ned','Nedostaci')}${F('spreman','Spremni')}${sprat.map(sp=>F('sprat:'+sp,'Sprat '+sp)).join('')}</div>`;
+  html+=`<div class="filterbar">${fazaUsed.map(f=>F('faza:'+f,f)).join('')}</div>`;
   html+=`<div style="margin:0 0 10px"><button class="badge" style="background:var(--navy);color:#fff;padding:9px 14px" onclick="openPrintDialog('all')">🖨️ Štampaj checkliste — izbor stanova (${DATA.stanovi.length})</button></div>`;
+  const fazaCol=f=>({'Grubi radovi':'var(--grey)','Instalacije':'var(--orange)','Mašinski':'var(--orange)','Završni radovi':'var(--blue)','Čišćenje':'var(--blue)','Spremno':'var(--green)'}[f]||'var(--grey)');
   html+=`<div class="card">${list.map(({s,st})=>`<div class="stan" onclick="openStan('${s.id}')">
       <div class="ozn">${s.oznaka}${s.vrsta==='poslovni'?' <span style="font-size:10px;background:var(--navy);color:#fff;border-radius:4px;padding:1px 5px;vertical-align:middle">PP</span>':''}</div>
       <div class="meta">${s.kategorija?s.kategorija+' · ':''}${s.sprat?('Sprat '+s.sprat):'—'} · ${s.kvadratura?s.kvadratura+' m²':'—'}
-        ${st.openDor?` · <span style="color:var(--red)">🛠️ ${st.openDor}</span>`:''}</div>
+        <br><span class="badge" style="background:${fazaCol(s.faza||'Grubi radovi')};color:#fff;font-size:10px">${s.faza||'Grubi radovi'}</span>
+        ${st.openDor?` <span style="color:var(--red)">🛠️ ${st.openDor}</span>`:''}</div>
       <div class="pct" style="color:${st.pct===100?'var(--green)':'var(--navy)'}">${st.pct}%</div>
       <span class="pill ${st.ready?'ok':'no'}">${st.ready?'Spreman':'—'}</span>
     </div>`).join('')||'<div class="empty">Nema stanova u ovom filteru.</div>'}</div>`;
@@ -283,23 +313,73 @@ function setStanFilter(k){ stanFilter=k; renderStanovi(); }
 function renderIzvodaci(){
   app.innerHTML = chrome('Izvođači', false);
   const c=document.getElementById('content');
-  const today=new Date().toISOString().slice(0,10); const map={};
-  DATA.dorade.forEach(d=>{ const k=d.izvodjac||'(nedodijeljeno)';
-    const o=map[k]||(map[k]={izv:k,open:0,late:0,closed:0,days:[]});
-    if(OPEN_STAT(d.status)){ o.open++; if(d.rok&&d.rok<today) o.late++; }
-    if(d.status==='Provjereno OK'){ o.closed++;
-      if(d.datum_prijave&&d.datum_zatvaranja) o.days.push((new Date(d.datum_zatvaranja)-new Date(d.datum_prijave))/86400000); }
-  });
-  const rows=Object.values(map).sort((a,b)=>b.open-a.open);
-  if(!rows.length){ c.innerHTML='<div class="empty">Još nema evidentiranih dorada / izvođača.</div>'; return; }
-  c.innerHTML=`<div class="card"><table class="rep">
-    <tr><th>Izvođač</th><th>Otvor.</th><th>Probij. rok</th><th>Zatvor.</th><th>Pros. dana</th></tr>
-    ${rows.map(o=>`<tr><td>${o.izv}</td>
-      <td class="${o.open?'hot':''}">${o.open}</td>
-      <td class="${o.late?'hot':''}">${o.late}</td>
-      <td>${o.closed}</td>
-      <td>${o.days.length?(o.days.reduce((a,b)=>a+b,0)/o.days.length).toFixed(1):'—'}</td></tr>`).join('')}
-  </table></div>`;
+  const today=new Date().toISOString().slice(0,10);
+  const esc=v=>(v||'').replace(/"/g,'&quot;');
+  let html=`<div style="margin:0 0 10px"><button class="badge" style="background:var(--green);color:#fff;padding:9px 14px" onclick="editIzvodjac()">➕ Dodaj izvođača</button></div>`;
+  if(!DATA.izvodjaci.length){
+    html+=`<div class="empty">Još nema izvođača. Dodaj prvog gore. 👷</div>`;
+  } else {
+    html+=DATA.izvodjaci.map(iz=>{
+      // workload: otvorene dorade (po imenu) + otvoreni zadaci (po id)
+      const od=DATA.dorade.filter(d=>d.izvodjac===iz.ime && OPEN_STAT(d.status));
+      const oz=DATA.zadaci.filter(z=>z.izvodjac_id===iz.id && z.status!=='Završen' && z.status!=='Otkazan');
+      const late=od.filter(d=>d.rok&&d.rok<today).length + oz.filter(z=>z.rok&&z.rok<today).length;
+      const days=[]; DATA.dorade.filter(d=>d.izvodjac===iz.ime && d.status==='Provjereno OK' && d.datum_prijave && d.datum_zatvaranja)
+        .forEach(d=>days.push((new Date(d.datum_zatvaranja)-new Date(d.datum_prijave))/86400000));
+      const avg=days.length?(days.reduce((a,b)=>a+b,0)/days.length).toFixed(1):'—';
+      const num=waNum(iz.telefon);
+      return `<div class="card" style="padding:12px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div><b style="font-size:16px">${iz.ime}</b>${iz.struka?` <span class="badge" style="background:var(--greybg)">${iz.struka}</span>`:''}
+            ${iz.telefon?`<div class="muted" style="margin-top:3px">📞 ${iz.telefon}</div>`:'<div class="muted" style="margin-top:3px">— bez broja —</div>'}
+            ${iz.napomena?`<div class="muted" style="font-size:12px">${iz.napomena}</div>`:''}</div>
+          <button class="badge" style="background:var(--greybg)" onclick="editIzvodjac('${iz.id}')">✏️</button>
+        </div>
+        <div class="muted" style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap">
+          <span>🛠️ Dorade: <b style="color:${od.length?'var(--red)':'inherit'}">${od.length}</b></span>
+          <span>📋 Zadaci: <b style="color:${oz.length?'var(--orange)':'inherit'}">${oz.length}</b></span>
+          ${late?`<span style="color:var(--red)">⏰ Probijen rok: <b>${late}</b></span>`:''}
+          <span>⌀ ${avg} dana</span>
+        </div>
+        ${num?`<a href="https://wa.me/${num}" target="_blank" class="badge" style="background:#25D366;color:#fff;display:inline-block;margin-top:8px;padding:8px 14px">📲 WhatsApp</a>
+          <a href="viber://chat?number=%2B${num}" class="badge" style="background:#7360f2;color:#fff;display:inline-block;margin-top:8px;padding:8px 14px">Viber</a>
+          <a href="tel:+${num}" class="badge" style="background:var(--navy);color:#fff;display:inline-block;margin-top:8px;padding:8px 14px">Pozovi</a>`:''}
+      </div>`;
+    }).join('');
+  }
+  c.innerHTML=html;
+}
+function editIzvodjac(id){
+  const iz=id?DATA.izvodjaci.find(x=>x.id===id):{};
+  const esc=v=>(v||'').replace(/"/g,'&quot;');
+  const modal=document.createElement('div'); modal.className='modal';
+  modal.innerHTML=`<div class="sheet"><h3>${id?'Izmijeni izvođača':'Novi izvođač'}</h3>
+    <label>Ime / firma</label><input id="iz_ime" value="${esc(iz.ime)}" placeholder="npr. Marko / Keramika DOO">
+    <label>Struka</label><input id="iz_struka" list="strukalist" value="${esc(iz.struka)}" placeholder="npr. Keramičar">
+    <datalist id="strukalist"><option value="Keramičar"><option value="Moler"><option value="Vodoinstalater"><option value="Električar"><option value="Stolar"><option value="Parketar"><option value="Gipsar"><option value="Bravar"><option value="Klima/grijanje"><option value="Fasader"></datalist>
+    <label>Telefon</label><input id="iz_tel" type="tel" value="${esc(iz.telefon)}" placeholder="067 123 456">
+    <label>Napomena</label><input id="iz_nap" value="${esc(iz.napomena)}" placeholder="opciono">
+    <button class="btn" onclick="saveIzvodjac(${id?`'${id}'`:'null'})">Sačuvaj</button>
+    ${id?`<button class="btn ghost" style="color:var(--red);border-color:var(--red)" onclick="delIzvodjac('${id}','${esc(iz.ime)}')">Obriši</button>`:''}
+    <button class="btn ghost" onclick="closeModal()">Otkaži</button></div>`;
+  modal.onclick=e=>{ if(e.target===modal) closeModal(); };
+  document.body.appendChild(modal);
+}
+async function saveIzvodjac(id){
+  const rec={ ime:val('iz_ime'), struka:val('iz_struka')||null, telefon:val('iz_tel')||null, napomena:val('iz_nap')||null };
+  if(!rec.ime){ alert('Unesi ime.'); return; }
+  closeModal();
+  const { error }= id ? await sb.from('izvodjaci').update(rec).eq('id',id)
+                      : await sb.from('izvodjaci').insert(rec);
+  if(error){ alert('Greška: '+error.message); return; }
+  await loadAll(); render();
+}
+async function delIzvodjac(id,ime){
+  if(!confirm('Obrisati izvođača '+ime+'? (Dorade/zadaci ostaju, samo se odveže.)')) return;
+  closeModal();
+  const { error }=await sb.from('izvodjaci').delete().eq('id',id);
+  if(error){ alert('Greška: '+error.message); return; }
+  await loadAll(); render();
 }
 
 function openStan(id){ curStan=DATA.stanovi.find(s=>s.id===id); render(); }
@@ -321,6 +401,7 @@ function renderStan(){
     <div class="bar" style="margin-top:8px"><i style="width:${st.pct}%"></i></div>
     <div class="muted" style="margin-top:6px">
       <b>${s.vrsta==='poslovni'?'🏪 Poslovni prostor':'🏠 Stan'}</b>${s.kategorija?(' · '+s.kategorija):''}${s.vrsta!=='poslovni'?(' · Grijanje: '+(s.tip_grijanja||'—')):''}
+      · Faza: <b>${s.faza||'Grubi radovi'}</b>
       · Otvorenih dorada: <b style="color:${open.length?'var(--red)':'inherit'}">${open.length}</b>
       ${s.opis?`<br><span style="font-size:12px">${s.opis}</span>`:''}</div>
   </div>`;
@@ -403,6 +484,8 @@ function editStan(id){
       <option value="">—</option>
       <option ${s.tip_grijanja==='Električno podno'?'selected':''}>Električno podno</option>
       <option ${s.tip_grijanja==='Vodeno podno + kotao'?'selected':''}>Vodeno podno + kotao</option></select>
+    <label>Faza radova</label><select id="e_faza">
+      ${FAZE.map(o=>`<option ${(s.faza||'Grubi radovi')===o?'selected':''}>${o}</option>`).join('')}</select>
     <label>Status primopredaje</label><select id="e_st">
       ${['Čeka','Zakazana','Primopredato','Odbijena'].map(o=>`<option ${s.status_primopredaje===o?'selected':''}>${o}</option>`).join('')}</select>
     <button class="btn" onclick="saveStan('${id}')">Sačuvaj</button>
@@ -413,7 +496,7 @@ function editStan(id){
 async function saveStan(id){
   const patch={ sprat:val('e_sprat')||null, kvadratura:val('e_kv')||null,
     tip_grijanja:val('e_tip')||null, status_primopredaje:val('e_st'),
-    vrsta:val('e_vrsta')||'stan', kategorija:val('e_kat')||null, opis:val('e_opis')||null };
+    vrsta:val('e_vrsta')||'stan', kategorija:val('e_kat')||null, opis:val('e_opis')||null, faza:val('e_faza')||'Grubi radovi' };
   closeModal();
   const { error }=await sb.from('stanovi').update(patch).eq('id',id);
   if(error){ alert('Greška: '+error.message); return; }
@@ -649,6 +732,172 @@ async function saveZapisnik(id){
   await loadAll(); alert('Sačuvano ✓');
 }
 
+// ---------- ZADACI / RADNI NALOZI ----------
+let zadFilter='open';
+function renderZadaci(){
+  app.innerHTML = chrome('Zadaci', false);
+  const c=document.getElementById('content');
+  const today=new Date().toISOString().slice(0,10);
+  const OPENZ=z=>z.status!=='Završen'&&z.status!=='Otkazan';
+  let list=DATA.zadaci.slice();
+  if(zadFilter==='open') list=list.filter(OPENZ);
+  else if(zadFilter==='late') list=list.filter(z=>OPENZ(z)&&z.rok&&z.rok<today);
+  const F=(k,l)=>`<button class="${zadFilter===k?'active':''}" onclick="setZadFilter('${k}')">${l}</button>`;
+  let html=`<div style="margin:0 0 10px"><button class="badge" style="background:var(--green);color:#fff;padding:9px 14px" onclick="editZadatak()">➕ Novi zadatak</button></div>`;
+  html+=`<div class="filterbar">${F('open','Otvoreni')}${F('late','Probijen rok')}${F('all','Svi')}</div>`;
+  if(!list.length) html+=`<div class="empty">Nema zadataka u ovom filteru. 📋</div>`;
+  list.forEach(z=>{
+    const stan=DATA.stanovi.find(s=>s.id===z.stan_id);
+    const late=z.rok&&OPENZ(z)&&z.rok<today;
+    const pcol=z.prioritet==='Kritičan'?'var(--red)':z.prioritet==='Visok'?'var(--orange)':'var(--grey)';
+    const scol=z.status==='Završen'?'var(--green)':z.status==='U toku'?'var(--blue)':z.status==='Otkazan'?'var(--grey)':'var(--orange)';
+    html+=`<div class="dorada" style="border-left-color:${pcol}" onclick="editZadatak('${z.id}')">
+      <div class="top"><span><b>${z.naziv}</b></span>
+        <span class="badge" style="background:${scol};color:#fff">${z.status}</span></div>
+      <div class="muted" style="margin-top:4px">
+        ${stan?'🏢 '+stan.oznaka+' · ':''}${z.izvodjac_id?'👷 '+izvName(z.izvodjac_id)+' · ':''}
+        <span class="badge" style="background:var(--greybg)">${z.prioritet}</span>
+        ${z.rok?` · <span style="color:${late?'var(--red)':'inherit'}">📅 ${z.rok}${late?' ⏰':''}</span>`:''}</div>
+      ${z.opis?`<div class="muted" style="font-size:12px;margin-top:3px">${z.opis}</div>`:''}
+      ${z.foto?`<div class="muted" style="font-size:12px;margin-top:3px">📷 ima sliku</div>`:''}
+    </div>`;
+  });
+  c.innerHTML=html;
+}
+function setZadFilter(k){ zadFilter=k; renderZadaci(); }
+function editZadatak(id){
+  const z=id?DATA.zadaci.find(x=>x.id===id):{};
+  const esc=v=>(v||'').replace(/"/g,'&quot;');
+  const stanOpts=`<option value="">— bez stana —</option>`+DATA.stanovi.map(s=>`<option value="${s.id}" ${z.stan_id===s.id?'selected':''}>${s.oznaka}</option>`).join('');
+  const izvOpts=`<option value="">— nedodijeljen —</option>`+DATA.izvodjaci.map(i=>`<option value="${i.id}" ${z.izvodjac_id===i.id?'selected':''}>${i.ime}${i.struka?' ('+i.struka+')':''}</option>`).join('');
+  const iz=z.izvodjac_id?DATA.izvodjaci.find(x=>x.id===z.izvodjac_id):null;
+  const num=iz&&waNum(iz.telefon);
+  const modal=document.createElement('div'); modal.className='modal';
+  modal.innerHTML=`<div class="sheet"><h3>${id?'Zadatak':'Novi radni nalog'}</h3>
+    <label>Naziv zadatka</label><input id="z_naziv" value="${esc(z.naziv)}" placeholder="npr. Postaviti pločice u kupatilu">
+    <label>Opis</label><textarea id="z_opis" rows="2">${z.opis||''}</textarea>
+    <label>Stan / jedinica</label><select id="z_stan">${stanOpts}</select>
+    <label>Izvođač</label><select id="z_izv">${izvOpts}</select>
+    <label>Prioritet</label><select id="z_pri">${['Normalan','Visok','Kritičan'].map(o=>`<option ${z.prioritet===o?'selected':''}>${o}</option>`).join('')}</select>
+    <label>Rok</label><input id="z_rok" type="date" value="${z.rok||''}">
+    <label>Status</label><select id="z_st">${['Otvoren','U toku','Završen','Otkazan'].map(o=>`<option ${z.status===o?'selected':''}>${o}</option>`).join('')}</select>
+    ${id?`<label>📷 Foto</label><input type="file" accept="image/*" capture="environment" onchange="upPhoto(this,'${id}','foto','zadaci')">
+      ${z.foto?`<div style="margin-top:4px"><a href="${z.foto}" target="_blank" class="muted">otvori sliku</a></div>`:''}`:'<div class="muted" style="font-size:12px;margin-top:6px">Sliku dodaješ nakon što sačuvaš zadatak.</div>'}
+    ${num?`<a href="https://wa.me/${num}?text=${encodeURIComponent('Radni nalog: '+(z.naziv||'')+(z.rok?' (rok '+z.rok+')':''))}" target="_blank" class="badge" style="background:#25D366;color:#fff;display:inline-block;margin:8px 0">📲 Pošalji izvođaču</a>`:''}
+    <button class="btn" onclick="saveZadatak(${id?`'${id}'`:'null'})">Sačuvaj</button>
+    ${id?`<button class="btn ghost" style="color:var(--red);border-color:var(--red)" onclick="delZadatak('${id}')">Obriši</button>`:''}
+    <button class="btn ghost" onclick="closeModal()">Otkaži</button></div>`;
+  modal.onclick=e=>{ if(e.target===modal) closeModal(); };
+  document.body.appendChild(modal);
+}
+async function saveZadatak(id){
+  const naziv=val('z_naziv'); if(!naziv){ alert('Unesi naziv zadatka.'); return; }
+  const status=val('z_st');
+  const rec={ naziv, opis:val('z_opis')||null, stan_id:val('z_stan')||null, izvodjac_id:val('z_izv')||null,
+    prioritet:val('z_pri'), rok:val('z_rok')||null, status,
+    datum_zavrsetka:(status==='Završen')?new Date().toISOString():null };
+  closeModal();
+  const { error }= id ? await sb.from('zadaci').update(rec).eq('id',id)
+                      : await sb.from('zadaci').insert(rec);
+  if(error){ alert('Greška: '+error.message); return; }
+  await loadAll(); render();
+}
+async function delZadatak(id){
+  if(!confirm('Obrisati ovaj zadatak?')) return;
+  closeModal();
+  const { error }=await sb.from('zadaci').delete().eq('id',id);
+  if(error){ alert('Greška: '+error.message); return; }
+  await loadAll(); render();
+}
+
+// ---------- DNEVNIK GRADILIŠTA ----------
+function renderDnevnik(){
+  app.innerHTML = chrome('Dnevnik', false);
+  const c=document.getElementById('content');
+  let html=`<div style="margin:0 0 10px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="badge" style="background:var(--green);color:#fff;padding:9px 14px" onclick="editDnevnik()">➕ Novi unos</button>
+    <button class="badge" style="background:var(--navy);color:#fff;padding:9px 14px" onclick="izvjestajZgrade()">📄 Izvještaj investitoru</button></div>`;
+  if(!DATA.dnevnik.length) html+=`<div class="empty">Još nema unosa u dnevnik. 📒</div>`;
+  html+=DATA.dnevnik.map(e=>`<div class="card" style="padding:12px" onclick="editDnevnik('${e.id}')">
+      <div style="display:flex;justify-content:space-between"><b>📅 ${e.datum}</b>${e.vrijeme?`<span class="muted">${e.vrijeme}</span>`:''}</div>
+      ${e.ekipe?`<div style="margin-top:4px"><b class="muted">Ekipe:</b> ${e.ekipe}</div>`:''}
+      ${e.uradjeno?`<div style="margin-top:2px">${e.uradjeno}</div>`:''}
+      ${e.isporuke?`<div class="muted" style="margin-top:2px">📦 ${e.isporuke}</div>`:''}
+      ${e.problemi?`<div style="margin-top:2px;color:var(--red)">⚠️ ${e.problemi}</div>`:''}
+      ${e.foto?`<div class="muted" style="font-size:12px;margin-top:3px">📷 ima sliku</div>`:''}
+    </div>`).join('');
+  c.innerHTML=html;
+}
+function editDnevnik(id){
+  const e=id?DATA.dnevnik.find(x=>x.id===id):{};
+  const today=new Date().toISOString().slice(0,10);
+  const esc=v=>(v||'').replace(/"/g,'&quot;');
+  const modal=document.createElement('div'); modal.className='modal';
+  modal.innerHTML=`<div class="sheet"><h3>${id?'Unos u dnevnik':'Novi unos'}</h3>
+    <label>Datum</label><input id="dn_datum" type="date" value="${e.datum||today}">
+    <label>Vremenske prilike</label><input id="dn_vrijeme" value="${esc(e.vrijeme)}" placeholder="npr. sunčano, 22°C">
+    <label>Ekipe / ko je radio</label><input id="dn_ekipe" value="${esc(e.ekipe)}" placeholder="npr. 3 molera, 2 keramičara">
+    <label>Šta je urađeno</label><textarea id="dn_uradjeno" rows="3">${e.uradjeno||''}</textarea>
+    <label>Isporuke materijala</label><textarea id="dn_isporuke" rows="2">${e.isporuke||''}</textarea>
+    <label>Problemi / zastoji</label><textarea id="dn_problemi" rows="2">${e.problemi||''}</textarea>
+    ${id?`<label>📷 Foto</label><input type="file" accept="image/*" capture="environment" onchange="upPhoto(this,'${id}','foto','dnevnik')">
+      ${e.foto?`<div style="margin-top:4px"><a href="${e.foto}" target="_blank" class="muted">otvori sliku</a></div>`:''}`:'<div class="muted" style="font-size:12px;margin-top:6px">Sliku dodaješ nakon što sačuvaš unos.</div>'}
+    <button class="btn" onclick="saveDnevnik(${id?`'${id}'`:'null'})">Sačuvaj</button>
+    ${id?`<button class="btn ghost" style="color:var(--red);border-color:var(--red)" onclick="delDnevnik('${id}')">Obriši</button>`:''}
+    <button class="btn ghost" onclick="closeModal()">Otkaži</button></div>`;
+  modal.onclick=ev=>{ if(ev.target===modal) closeModal(); };
+  document.body.appendChild(modal);
+}
+async function saveDnevnik(id){
+  const rec={ datum:val('dn_datum')||new Date().toISOString().slice(0,10), vrijeme:val('dn_vrijeme')||null,
+    ekipe:val('dn_ekipe')||null, uradjeno:val('dn_uradjeno')||null, isporuke:val('dn_isporuke')||null,
+    problemi:val('dn_problemi')||null };
+  closeModal();
+  const { error }= id ? await sb.from('dnevnik').update(rec).eq('id',id)
+                      : await sb.from('dnevnik').insert(rec);
+  if(error){ alert('Greška: '+error.message); return; }
+  await loadAll(); render();
+}
+async function delDnevnik(id){
+  if(!confirm('Obrisati ovaj unos iz dnevnika?')) return;
+  closeModal();
+  const { error }=await sb.from('dnevnik').delete().eq('id',id);
+  if(error){ alert('Greška: '+error.message); return; }
+  await loadAll(); render();
+}
+// Izvještaj o napretku za investitora (PDF preko printHTML)
+function izvjestajZgrade(){
+  const today=new Date().toISOString().slice(0,10);
+  const stats=DATA.stanovi.map(s=>({s,st:stanStats(s.id)}));
+  const ukupno=DATA.stanovi.length;
+  const avg=ukupno?Math.round(stats.reduce((a,o)=>a+o.st.pct,0)/ukupno):0;
+  const spremni=stats.filter(o=>o.st.ready).length;
+  const odo=DATA.dorade.filter(d=>OPEN_STAT(d.status)).length;
+  const crit=DATA.dorade.filter(d=>OPEN_STAT(d.status)&&d.prioritet==='Kritičan').length;
+  const otvZad=DATA.zadaci.filter(z=>z.status!=='Završen'&&z.status!=='Otkazan').length;
+  const fazaCnt={}; FAZE.forEach(f=>fazaCnt[f]=0);
+  DATA.stanovi.forEach(s=>{ const f=s.faza||'Grubi radovi'; fazaCnt[f]=(fazaCnt[f]||0)+1; });
+  const fazaRows=FAZE.filter(f=>fazaCnt[f]>0).map(f=>`<tr><td>${f}</td><td class="c">${fazaCnt[f]}</td><td class="c">${ukupno?Math.round(fazaCnt[f]/ukupno*100):0}%</td></tr>`).join('');
+  const stanRows=stats.map(({s,st})=>`<tr><td>${s.oznaka}${s.vrsta==='poslovni'?' (PP)':''}</td><td>${s.kategorija||'—'}</td><td>${s.sprat||'—'}</td><td>${s.faza||'Grubi radovi'}</td><td class="c">${st.pct}%</td><td class="c">${st.openDor||''}</td><td>${st.ready?'Spreman':'—'}</td></tr>`).join('');
+  const recent=DATA.dnevnik.slice(0,5).map(e=>`<tr><td>${e.datum}</td><td>${(e.uradjeno||'').replace(/</g,'&lt;')}${e.problemi?' ⚠️ '+e.problemi.replace(/</g,'&lt;'):''}</td></tr>`).join('');
+  const inner=`<div class="pdoc"><div class="pg">
+    <h2 class="pttl">IZVJEŠTAJ O NAPRETKU GRADNJE</h2>
+    <table class="pmeta">
+      <tr><td>Objekat</td><td>${DATA.zgrada.naziv||''}</td><td>Datum</td><td><b>${today}</b></td></tr>
+      <tr><td>Ukupna završenost</td><td><b>${avg}%</b></td><td>Jedinica</td><td>${ukupno}</td></tr>
+      <tr><td>Spremno za primopredaju</td><td>${spremni}</td><td>Otvoreni zadaci</td><td>${otvZad}</td></tr>
+      <tr><td>Otvorene dorade</td><td>${odo}</td><td>Kritične dorade</td><td>${crit}</td></tr>
+    </table>
+    <div class="psec">FAZE RADOVA</div>
+    <table class="ck"><tr><th>Faza</th><th class="c">Jedinica</th><th class="c">Udio</th></tr>${fazaRows}</table>
+    <div class="psec">STATUS PO JEDINICI</div>
+    <table class="ck"><tr><th>Jedinica</th><th>Kategorija</th><th>Sprat</th><th>Faza</th><th class="c">%</th><th class="c">🛠️</th><th>Spremno</th></tr>${stanRows}</table>
+    ${recent?`<div class="psec">POSLJEDNJI UNOSI IZ DNEVNIKA</div><table class="ck"><tr><th>Datum</th><th>Aktivnost</th></tr>${recent}</table>`:''}
+    <div class="psig"><div>Izvođač / Nadzor<br><br>__________________</div><div>Investitor<br><br>__________________</div></div>
+  </div></div>`;
+  printHTML(inner);
+}
+
 // ---------- DORADE ----------
 function renderDorade(){
   app.innerHTML = chrome('Dorade', false);
@@ -685,7 +934,9 @@ function editDorada(id){
   const modal=document.createElement('div'); modal.className='modal';
   modal.innerHTML=`<div class="sheet"><h3>Dorada — ${d.detalj||''}</h3>
     <label>Opis problema</label><textarea id="d_opis" rows="2">${d.opis||''}</textarea>
-    <label>Izvođač zadužen</label><input id="d_izv" value="${d.izvodjac||''}">
+    <label>Izvođač zadužen</label><input id="d_izv" list="izvlist" value="${d.izvodjac||''}" placeholder="izaberi ili upiši">
+    <datalist id="izvlist">${DATA.izvodjaci.map(i=>`<option value="${i.ime}">`).join('')}</datalist>
+    ${(()=>{ const iz=izvByName(d.izvodjac); const n=iz&&waNum(iz.telefon); return n?`<a href="https://wa.me/${n}?text=${encodeURIComponent('Dorada — '+(DATA.stanovi.find(s=>s.id===d.stan_id)||{}).oznaka+(d.prostorija?' · '+d.prostorija:'')+': '+(d.detalj||d.opis||'')+(d.rok?' (rok '+d.rok+')':''))}" target="_blank" class="badge" style="background:#25D366;color:#fff;display:inline-block;margin:4px 0">📲 Pošalji majstoru</a>`:''; })()}
     <label>Prioritet</label><select id="d_pri">
       ${['Normalan','Visok','Kritičan'].map(o=>`<option ${d.prioritet===o?'selected':''}>${o}</option>`).join('')}</select>
     <label>Rok</label><input id="d_rok" type="date" value="${d.rok||''}">
@@ -715,16 +966,17 @@ async function saveDorada(id){
   if(error){ alert('Greška: '+error.message); return; }
   await loadAll(); render();
 }
-async function upPhoto(inp,id,field){
+async function upPhoto(inp,id,field,table){
+  table=table||'dorade';
   const f=inp.files[0]; if(!f) return;
-  const path=`${id}/${field}_${Date.now()}.jpg`;
+  const path=`${table}/${id}/${field}_${Date.now()}.jpg`;
   const { error }=await sb.storage.from('fotografije').upload(path,f,{upsert:true});
   if(error){ alert('Upload greška: '+error.message); return; }
   const { data }=sb.storage.from('fotografije').getPublicUrl(path);
-  await sb.from('dorade').update({[field]:data.publicUrl}).eq('id',id);
+  await sb.from(table).update({[field]:data.publicUrl}).eq('id',id);
   await loadAll();
-  // odmah ponudi slanje majstoru (Viber/WhatsApp/...) — koristi tek snimljeni fajl
-  if(confirm('Slika sačuvana ✓\nPoslati je odmah majstoru (Viber / WhatsApp)?')) shareFoto(id,field,f);
+  if(table==='dorade' && confirm('Slika sačuvana ✓\nPoslati je odmah majstoru (Viber / WhatsApp)?')) shareFoto(id,field,f);
+  else { alert('Slika sačuvana ✓'); if(document.querySelector('.modal')) render(); }
 }
 // Proslijedi sliku + opis majstoru preko native share sheet-a (Viber/WhatsApp/...).
 async function shareFoto(id, field, fileObj){

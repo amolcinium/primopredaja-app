@@ -312,3 +312,40 @@ insert into public.stavke (id, prostorija, naziv, redoslijed, primjenjivost, vrs
  (143,'ZAVRŠNO / PREDAJA','Ključevi — broj predanih ključeva evidentiran',143,'sve','poslovni'),
  (144,'ZAVRŠNO / PREDAJA','Zapisnik o primopredaji + brojila potpisani',144,'sve','poslovni')
 on conflict (id) do nothing;
+
+-- ========== v4: Construction management (izvodjaci, zadaci, dnevnik, faza) ==========
+create table if not exists public.izvodjaci (
+  id uuid primary key default gen_random_uuid(),
+  ime text not null, struka text, telefon text, napomena text,
+  created_at timestamptz default now()
+);
+create table if not exists public.zadaci (
+  id uuid primary key default gen_random_uuid(),
+  stan_id uuid references public.stanovi(id) on delete set null,
+  izvodjac_id uuid references public.izvodjaci(id) on delete set null,
+  naziv text not null, opis text,
+  prioritet text default 'Normalan' check (prioritet in ('Normalan','Visok','Kritičan')),
+  rok date,
+  status text default 'Otvoren' check (status in ('Otvoren','U toku','Završen','Otkazan')),
+  foto text, autor text, created_at timestamptz default now(), datum_zavrsetka timestamptz
+);
+create table if not exists public.dnevnik (
+  id uuid primary key default gen_random_uuid(),
+  datum date not null default current_date,
+  vrijeme text, ekipe text, uradjeno text, isporuke text, problemi text,
+  foto text, autor text, created_at timestamptz default now()
+);
+alter table public.stanovi add column if not exists faza text default 'Grubi radovi';
+do $$
+declare t text;
+begin
+  foreach t in array array['izvodjaci','zadaci','dnevnik'] loop
+    execute format('alter table public.%I enable row level security', t);
+    if not exists (select 1 from pg_policies where schemaname='public' and tablename=t and policyname='auth_all') then
+      execute format('create policy auth_all on public.%I for all to authenticated using (true) with check (true)', t);
+    end if;
+    if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename=t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
