@@ -569,7 +569,7 @@ function pmSet(mode){ window._pmMode=mode;
 function pmAll(v){ document.querySelectorAll('.pmck').forEach(c=>c.checked=v); }
 function pmFloor(sp){ document.querySelectorAll('.pmck').forEach(c=>{ if(c.dataset.sprat===(''+sp)) c.checked=true; }); }
 function doPrintChecklist(){
-  const ids=[...document.querySelectorAll('.pmck:checked')].map(c=>+c.value);
+  const ids=[...document.querySelectorAll('.pmck:checked')].map(c=>c.value); // uuid string — NE coerce u broj
   if(!ids.length){ alert('Izaberi bar jednu jedinicu.'); return; }
   const opts={ mode:window._pmMode||'blank',
     status:document.getElementById('pi_status').checked,
