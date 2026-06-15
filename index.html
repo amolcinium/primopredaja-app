@@ -483,41 +483,37 @@ const PRINT_CSS = `
 function buildPrintDoc(inner){
   return '<!doctype html><html lang="sr"><head><meta charset="utf-8">'
     +'<meta name="viewport" content="width=device-width,initial-scale=1">'
-    +'<title>Checklista — štampa</title><style>'
-    +'@page{margin:12mm} html,body{margin:0;background:#fff} body{padding:16px;color:#111}'
+    +'<title>Checklista</title><style>'
+    +'@page{margin:12mm} html,body{margin:0;background:#fff} body{padding:14px;color:#111}'
     +PRINT_CSS
-    +'.tbar{position:sticky;top:0;display:flex;gap:8px;background:#1b2a4a;padding:10px;margin:-16px -16px 16px;z-index:5}'
-    +'.tbar button{background:#2ecc71;color:#fff;border:0;border-radius:7px;padding:11px 16px;font-size:15px;font-weight:700;cursor:pointer}'
-    +'.tbar button.sec{background:rgba(255,255,255,.22)}'
-    +'@media print{.tbar{display:none!important} body{padding:0}}'
-    +'</style></head><body>'
-    +'<div class="tbar"><button onclick="window.print()">🖨️ Štampaj / Sačuvaj PDF</button>'
-    +'<button class="sec" onclick="window.close()">Zatvori</button></div>'
-    +inner
-    +'</body></html>';
+    +'</style></head><body>'+inner+'</body></html>';
 }
-// Otvori sadržaj kao PRAVU stranicu (Blob URL) u novom tabu — pouzdano desktop + mobilni.
+// PREVIEW + ŠTAMPA: vidljiv preko-cijelog-ekrana iframe (preview) + dugmad u traci iznad.
+// Vidljiv iframe se štampa pouzdano (skriveni/offscreen iframe i fixed-overlay daju prazno).
 function printHTML(inner){
   const doc=buildPrintDoc(inner);
-  let url=null;
-  try{ url=URL.createObjectURL(new Blob([doc],{type:'text/html'})); }catch(e){}
-  const w=window.open(url||'','_blank');
-  if(w){
-    if(!url){ try{ w.document.open(); w.document.write(doc); w.document.close(); }catch(e){} }
-    try{ w.focus(); }catch(e){}
-    return; // auto-print je ugrađen u sam dokument
-  }
-  // pop-up blokiran -> vidljiv fullscreen prikaz (srcdoc iframe) sa dugmetom za štampu i ✕
   let wrap=document.getElementById('pwrap'); if(wrap) wrap.remove();
   wrap=document.createElement('div'); wrap.id='pwrap';
-  wrap.style.cssText='position:fixed;inset:0;z-index:9999;background:#fff';
-  const x=document.createElement('button'); x.textContent='✕ Zatvori';
-  x.style.cssText='position:fixed;top:8px;right:8px;z-index:10000;background:#1b2a4a;color:#fff;border:0;border-radius:8px;padding:9px 13px;font-size:15px';
-  x.onclick=()=>wrap.remove();
+  wrap.style.cssText='position:fixed;inset:0;z-index:99999;background:#fff;display:flex;flex-direction:column';
+  // traka sa kontrolama (parent, ne ulazi u štampu)
+  const bar=document.createElement('div');
+  bar.style.cssText='display:flex;gap:8px;align-items:center;background:#1F3864;padding:8px 10px;flex:0 0 auto';
+  bar.innerHTML='<span style="color:#fff;font-weight:600;flex:1;font-size:14px">👁️ Pregled — provjeri pa štampaj</span>';
+  const pbtn=document.createElement('button'); pbtn.textContent='🖨️ Štampaj / Sačuvaj PDF';
+  pbtn.style.cssText='background:#2e7d32;color:#fff;border:0;border-radius:7px;padding:10px 14px;font-size:14px;font-weight:700';
+  const cbtn=document.createElement('button'); cbtn.textContent='✕ Zatvori';
+  cbtn.style.cssText='background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:7px;padding:10px 12px;font-size:14px';
+  bar.appendChild(pbtn); bar.appendChild(cbtn);
+  // iframe = sam preview (vidljiv); puni se preko Blob URL-a (pouzdano)
   const f=document.createElement('iframe');
-  f.setAttribute('srcdoc', doc);
-  f.style.cssText='width:100%;height:100%;border:0';
-  wrap.appendChild(f); wrap.appendChild(x); document.body.appendChild(wrap);
+  f.style.cssText='flex:1 1 auto;width:100%;border:0;background:#fff';
+  let url=null;
+  try{ url=URL.createObjectURL(new Blob([doc],{type:'text/html'})); f.src=url; }
+  catch(e){ f.setAttribute('srcdoc', doc); }
+  cbtn.onclick=()=>{ wrap.remove(); if(url){ try{URL.revokeObjectURL(url);}catch(e){} } };
+  pbtn.onclick=()=>{ try{ f.contentWindow.focus(); f.contentWindow.print(); }
+    catch(e){ alert('Štampa nije uspjela: '+e.message); } };
+  wrap.appendChild(bar); wrap.appendChild(f); document.body.appendChild(wrap);
 }
 
 // ---------- grupisanje: KATEGORIJA (sekcija) -> POTKATEGORIJA (prostorija) -> stavke ----------
