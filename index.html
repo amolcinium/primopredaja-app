@@ -4,88 +4,91 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Primopredaja — praćenje završnih radova</title>
+<link rel="stylesheet" href="ui-v1.css">
+<script src="ui-v1.js"></script>
 <style>
-  :root{ --navy:#1F3864; --blue:#2E5395; --green:#2e7d32; --greenbg:#d7f0d7;
-    --red:#c62828; --redbg:#fde0e0; --orange:#e07b00; --orangebg:#ffe6c7;
-    --grey:#888; --greybg:#eceff3; --line:#dde3ec; }
+  :root{ --navy:var(--accent); --blue:var(--accent); --green:var(--ok); --greenbg:var(--ok-soft);
+    --red:var(--err); --redbg:var(--err-soft); --orange:var(--warn); --orangebg:var(--warn-soft);
+    --grey:var(--text-muted); --greybg:var(--surface-2); --line:var(--border); }
   *{box-sizing:border-box} html,body{margin:0}
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f6fa;color:#1a2230;
-    padding-bottom:70px;font-size:15px}
-  header{background:var(--navy);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:10;
-    display:flex;align-items:center;gap:10px;box-shadow:0 2px 6px rgba(0,0,0,.15)}
-  header h1{font-size:16px;margin:0;font-weight:600;flex:1}
-  header button{background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:6px;padding:6px 10px;font-size:13px}
+  body{background:var(--bg);color:var(--text);
+    padding-bottom:70px;font-size:var(--fs-base)}
+  header{background:var(--surface);color:var(--text);padding:0 var(--s4);min-height:56px;position:sticky;top:0;z-index:10;
+    display:flex;align-items:center;gap:var(--s2);border-bottom:1px solid var(--border)}
+  header h1{font-size:var(--fs-lg);margin:0;font-weight:700;flex:1}
+  header button{background:none;color:var(--text-muted);border:1px solid var(--border);border-radius:var(--radius-sm);min-height:36px;padding:0 var(--s3);font:600 var(--fs-sm) var(--font);cursor:pointer}
+  header button:hover{background:var(--surface-2);color:var(--text)}
   .wrap{max-width:760px;margin:0 auto;padding:14px}
-  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+  .card{margin-bottom:var(--s3)}
   .kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .kpi{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
-  .kpi .n{font-size:26px;font-weight:700;line-height:1.1} .kpi .l{font-size:12px;color:var(--grey);margin-top:3px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
+  .kpi .n{font-size:var(--fs-2xl);font-weight:700;line-height:1.1} .kpi .l{font-size:var(--fs-xs);color:var(--grey);margin-top:3px}
   .bar{height:9px;background:var(--greybg);border-radius:6px;overflow:hidden;margin-top:6px}
   .bar>i{display:block;height:100%;background:var(--green)}
   .stan{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--line);cursor:pointer}
   .stan:last-child{border-bottom:0}
-  .stan .ozn{font-weight:700;width:54px} .stan .meta{flex:1;font-size:12px;color:var(--grey)}
+  .stan .ozn{font-weight:700;width:54px} .stan .meta{flex:1;font-size:var(--fs-xs);color:var(--grey)}
   .stan .pct{font-weight:700;width:46px;text-align:right}
-  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:var(--fs-xs);font-weight:600}
   .pill.ok{background:var(--greenbg);color:var(--green)} .pill.no{background:var(--redbg);color:var(--red)}
-  .room{margin:16px 0 6px;font-weight:700;color:var(--navy);font-size:13px;text-transform:uppercase;letter-spacing:.3px}
-  .item{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:9px;margin-bottom:7px;background:#fff}
-  .item .t{flex:1;font-size:14px} .item .s{width:74px;text-align:center;font-weight:700;border-radius:7px;padding:7px 0;font-size:13px}
+  .room{margin:16px 0 6px;font-weight:700;color:var(--navy);font-size:var(--fs-sm);text-transform:uppercase;letter-spacing:.3px}
+  .item{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:9px;margin-bottom:7px;background:var(--surface)}
+  .item .t{flex:1;font-size:var(--fs-base)} .item .s{width:74px;text-align:center;font-weight:700;border-radius:7px;padding:7px 0;font-size:var(--fs-sm)}
   .s.OK{background:var(--greenbg);color:var(--green)} .s.X{background:var(--redbg);color:var(--red)}
   .s.DORADA{background:var(--orangebg);color:var(--orange)} .s.NP{background:var(--greybg);color:var(--grey)}
-  .s.none{background:#fff;color:#bbb;border:1px dashed #ccc}
-  .tabbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);
-    display:flex;z-index:10} .tabbar button{flex:1;border:0;background:none;padding:8px 0 7px;font-size:10px;color:var(--grey);line-height:1.1}
-  .tabbar button.active{color:var(--blue);font-weight:700}
-  .tabbar .ic{font-size:19px;display:block;margin-bottom:2px}
-  .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;z-index:50}
-  .sheet{background:#fff;width:100%;max-width:760px;margin:0 auto;border-radius:16px 16px 0 0;padding:18px;max-height:88vh;overflow:auto}
+  .s.none{background:var(--surface);color:var(--text-muted);border:1px dashed var(--border)}
+  .tabbar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--line);
+    display:flex;z-index:10} .tabbar button{flex:1;border:0;background:none;padding:8px 0 7px;font-size:var(--fs-xs);color:var(--grey);line-height:1.1}
+  .tabbar button.active{color:var(--accent);font-weight:700}
+  .tabbar .ic{font-size:var(--fs-lg);display:block;margin-bottom:2px}
+  .modal{position:fixed;inset:0;background:var(--backdrop);display:flex;align-items:flex-end;z-index:50}
+  .sheet{background:var(--surface);width:100%;max-width:760px;margin:0 auto;border-radius:16px 16px 0 0;padding:18px;max-height:88vh;overflow:auto}
   .sheet h3{margin:0 0 10px} .opt{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0}
-  .opt button{padding:14px;border-radius:9px;border:2px solid var(--line);font-weight:700;font-size:15px;background:#fff}
-  .pm{line-height:1.35} .pm small{display:block;font-weight:400;font-size:12px;color:var(--grey);margin-top:3px}
-  .pm.active{border-color:var(--blue);background:var(--blue);color:#fff} .pm.active small{color:#dbe7ff}
+  .opt button{padding:14px;border-radius:9px;border:2px solid var(--line);font-weight:700;font-size:var(--fs-base);background:var(--surface)}
+  .pm{line-height:1.35} .pm small{display:block;font-weight:400;font-size:var(--fs-xs);color:var(--grey);margin-top:3px}
+  .pm.active{border-color:var(--accent);background:var(--accent);color:var(--accent-ink)} .pm.active small{color:var(--accent-ink)}
   .opt button.OK{color:var(--green)} .opt button.X{color:var(--red)}
   .opt button.DORADA{color:var(--orange)} .opt button.NP{color:var(--grey)}
-  label{font-size:12px;color:var(--grey);display:block;margin:10px 0 3px}
-  input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:15px;font-family:inherit}
-  .btn{background:var(--blue);color:#fff;border:0;border-radius:9px;padding:13px;width:100%;font-size:16px;font-weight:600;margin-top:14px}
-  .btn.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue);margin-top:8px}
-  .dorada{border-left:4px solid var(--orange);padding:11px;border:1px solid var(--line);border-radius:9px;margin-bottom:9px;background:#fff}
-  .dorada.crit{border-left-color:var(--red)} .dorada .top{display:flex;justify-content:space-between;font-size:12px;color:var(--grey)}
+  label{font-size:var(--fs-xs);color:var(--grey);display:block;margin:10px 0 3px}
+  input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:var(--fs-input);font-family:inherit;background:var(--surface);color:var(--text)}
+  #app .btn:not(.btn-sm){width:100%;min-height:48px;margin-top:var(--s3)}
+  .dorada{border-left:4px solid var(--orange);padding:11px;border:1px solid var(--line);border-radius:9px;margin-bottom:9px;background:var(--surface)}
+  .dorada.crit{border-left-color:var(--red)} .dorada .top{display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--grey)}
   .dorada .d{font-weight:600;margin:3px 0}
-  .badge{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px}
+  .fbar{width:90px}
+  .pwrap{position:fixed;inset:0;z-index:99999;background:var(--surface);display:flex;flex-direction:column}
+  .dorada.p-err{border-left:4px solid var(--err)} .dorada.p-warn{border-left:4px solid var(--warn)} .dorada.p-muted{border-left:4px solid var(--text-muted)}
   .login{max-width:340px;margin:14vh auto;text-align:center;padding:20px}
-  .login .logo{font-size:42px} .muted{color:var(--grey);font-size:13px}
-  .filterbar{display:flex;gap:7px;overflow:auto;padding-bottom:8px}
-  .filterbar button{white-space:nowrap;border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 12px;font-size:13px}
-  .filterbar button.active{background:var(--blue);color:#fff;border-color:var(--blue)}
-  .empty{text-align:center;color:var(--grey);padding:30px 10px}
-  .rep{width:100%;border-collapse:collapse;font-size:13px}
+  .login .logo{font-size:var(--fs-3xl)} .muted{font-size:var(--fs-sm)}
+  .filterbar{display:flex;gap:7px;overflow:auto;padding-bottom:8px;scrollbar-width:none}
+  .filterbar button{white-space:nowrap;border:1px solid var(--line);background:var(--surface);border-radius:20px;padding:6px 12px;font-size:var(--fs-sm)}
+  .filterbar button.active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .rep{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
   .rep th,.rep td{border:1px solid var(--line);padding:6px 8px;text-align:center}
   .rep th{background:var(--greybg)} .rep td:first-child,.rep th:first-child{text-align:left}
   .rep .hot{background:var(--redbg);color:var(--red);font-weight:700}
-  .zapisnik{position:fixed;inset:0;background:#fff;z-index:100;overflow:auto}
-  .znav{position:sticky;top:0;background:var(--navy);display:flex;gap:8px;padding:10px}
-  .znav button{background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:6px;padding:8px 12px;font-size:14px}
-  .znav .zsave{background:var(--blue)} .znav .zprint{background:var(--green);margin-left:auto}
+  .zapisnik{position:fixed;inset:0;background:var(--surface);z-index:100;overflow:auto}
+  .znav{position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:8px;padding:10px}
+  .znav button{background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:var(--fs-base)}
+  .znav .zsave{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)} .znav .zprint{background:var(--ok);color:var(--accent-ink);border-color:var(--ok);margin-left:auto}
   .zdoc{max-width:720px;margin:0 auto;padding:20px}
-  .zdoc h2{text-align:center;font-size:18px} .zdoc h3{font-size:14px;margin-top:18px;border-bottom:1px solid var(--line);padding-bottom:4px}
-  .zt{width:100%;border-collapse:collapse;margin:10px 0} .zt td{border:1px solid var(--line);padding:6px;font-size:13px}
-  .zt td:nth-child(odd){background:var(--greybg);font-size:12px;width:22%}
+  .zdoc h2{text-align:center;font-size:var(--fs-lg)} .zdoc h3{font-size:var(--fs-base);margin-top:18px;border-bottom:1px solid var(--line);padding-bottom:4px}
+  .zt{width:100%;border-collapse:collapse;margin:10px 0} .zt td{border:1px solid var(--line);padding:6px;font-size:var(--fs-sm)}
+  .zt td:nth-child(odd){background:var(--greybg);font-size:var(--fs-xs);width:22%}
   .zrow{margin:10px 0} .zgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-  .zsig{display:flex;justify-content:space-around;margin-top:46px;text-align:center;font-size:13px}
-  .ck{width:100%;border-collapse:collapse;margin:4px 0 10px;font-size:12px}
-  .ck th,.ck td{border:1px solid #999;padding:5px 6px}
-  .ck th{background:var(--greybg);font-size:11px}
+  .zsig{display:flex;justify-content:space-around;margin-top:46px;text-align:center;font-size:var(--fs-sm)}
+  .ck{width:100%;border-collapse:collapse;margin:4px 0 10px;font-size:var(--fs-xs)}
+  .ck th,.ck td{border:1px solid var(--border);padding:5px 6px}
+  .ck th{background:var(--greybg);font-size:var(--fs-xs)}
   .ck td:nth-child(2),.ck td:nth-child(3),.ck td:nth-child(4),
   .ck th:nth-child(2),.ck th:nth-child(3),.ck th:nth-child(4){width:34px;text-align:center}
   .ck .cnp{width:30%} .ck td:nth-child(5){min-width:120px}
-  .pgstan h2{text-align:center;font-size:16px;margin:0 0 6px}
-  .pgstan h3{font-size:12px;margin:12px 0 2px;color:var(--navy);text-transform:uppercase}
+  .pgstan h2{text-align:center;font-size:var(--fs-lg);margin:0 0 6px}
+  .pgstan h3{font-size:var(--fs-xs);margin:12px 0 2px;color:var(--navy);text-transform:uppercase}
   @page{margin:12mm}
-  @media print{ html,body{height:auto!important;overflow:visible!important;background:#fff!important}
+  @media print{ html,body{height:auto!important;overflow:visible!important;background:var(--surface)!important}
     body>*:not(#zapisnik){display:none!important} .noprint{display:none!important}
-    #zapisnik{position:static!important;inset:auto!important;overflow:visible!important;height:auto!important;background:#fff}
+    #zapisnik{position:static!important;inset:auto!important;overflow:visible!important;height:auto!important;background:var(--surface)}
     .zdoc{max-width:100%!important;margin:0!important;padding:0!important}
     .zdoc input,.zdoc textarea{border:none;padding:0}
     .pgstan{page-break-inside:auto} .ck tr{page-break-inside:avoid} }
@@ -127,14 +130,14 @@ function renderSetup(msg){
     <div class="logo">⚙️</div>
     <h2>Podešavanje</h2>
     <p class="muted">Jednom unesi podatke iz svog Supabase projekta (Settings → API).</p>
-    <label style="text-align:left">Project URL</label>
+    <label class="ta-left">Project URL</label>
     <input id="c_url" placeholder="https://xxxx.supabase.co" value="${CFG.url||''}">
-    <label style="text-align:left">anon public ključ</label>
+    <label class="ta-left">anon public ključ</label>
     <input id="c_anon" placeholder="eyJhbGci..." value="${CFG.anon||''}">
-    <label style="text-align:left">Email naloga (pristup)</label>
+    <label class="ta-left">Email naloga (pristup)</label>
     <input id="c_email" value="${CFG.email||'ekipa@primopredaja.local'}">
-    ${msg?`<p style="color:var(--red);font-size:13px">${msg}</p>`:''}
-    <button class="btn" onclick="saveCfg()">Sačuvaj i nastavi</button>
+    ${msg?`<p class="text-err fs-sm">${msg}</p>`:''}
+    <button class="btn btn-primary" onclick="saveCfg()">Sačuvaj i nastavi</button>
   </div>`;
 }
 function saveCfg(){
@@ -148,10 +151,10 @@ function renderLogin(msg){
     <div class="logo">🏗️</div>
     <h2>Primopredaja</h2>
     <p class="muted">Praćenje završnih radova i dorada</p>
-    <label style="text-align:left">Pristupni kod</label>
+    <label class="ta-left">Pristupni kod</label>
     <input id="code" type="password" placeholder="unesi kod" autocomplete="current-password">
-    ${msg?`<p style="color:var(--red);font-size:13px">${msg}</p>`:''}
-    <button class="btn" id="loginBtn">Uđi</button>
+    ${msg?`<p class="text-err fs-sm">${msg}</p>`:''}
+    <button class="btn btn-primary" id="loginBtn">Uđi</button>
   </div>`;
   document.getElementById('loginBtn').onclick = doLogin;
   document.getElementById('code').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
@@ -255,31 +258,31 @@ function renderDashboard(){
   const crit = DATA.dorade.filter(d=>OPEN_STAT(d.status)&&d.prioritet==='Kritičan').length;
   const predato = DATA.stanovi.filter(s=>s.status_primopredaje==='Primopredato').length;
   const otvZad = DATA.zadaci.filter(z=>z.status!=='Završen'&&z.status!=='Otkazan').length;
-  const K=(n,l,col)=>`<div class="kpi"><div class="n" style="color:${col}">${n}</div><div class="l">${l}</div></div>`;
+  const K=(n,l,col)=>`<div class="kpi"><div class="n ${col}">${n}</div><div class="l">${l}</div></div>`;
   // faze breakdown
   const fazaCnt={}; FAZE.forEach(f=>fazaCnt[f]=0);
   DATA.stanovi.forEach(s=>{ const f=s.faza||'Grubi radovi'; fazaCnt[f]=(fazaCnt[f]||0)+1; });
-  const fazaCol=f=>({'Grubi radovi':'#9aa3af','Instalacije':'#e07b00','Mašinski':'#e07b00','Završni radovi':'#2E5395','Čišćenje':'#2E5395','Spremno':'#2e7d32'}[f]||'#9aa3af');
-  const fazaBar=FAZE.filter(f=>fazaCnt[f]>0).map(f=>`<div onclick="nav('stanovi');setTimeout(()=>setStanFilter('faza:${f}'),0)" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:5px 0">
-      <span style="width:11px;height:11px;border-radius:3px;background:${fazaCol(f)};flex:0 0 auto"></span>
-      <span style="flex:1;font-size:13px">${f}</span>
+  const fazaSem=f=>({'Instalacije':'warn','Mašinski':'warn','Završni radovi':'accent','Čišćenje':'accent','Spremno':'ok'}[f]||'muted');
+  const fazaBar=FAZE.filter(f=>fazaCnt[f]>0).map(f=>`<div onclick="nav('stanovi');setTimeout(()=>setStanFilter('faza:${f}'),0)" class="flex items-center gap-2 py-1 clickable">
+      <span class="dot ${fazaSem(f)}"></span>
+      <span class="flex-1 fs-sm">${f}</span>
       <b>${fazaCnt[f]}</b>
-      <span style="width:90px;height:7px;background:var(--greybg);border-radius:5px;overflow:hidden"><i style="display:block;height:100%;width:${ukupno?Math.round(fazaCnt[f]/ukupno*100):0}%;background:${fazaCol(f)}"></i></span></div>`).join('');
+      <span class="progress fbar ${fazaSem(f)}" style="--p:${ukupno?Math.round(fazaCnt[f]/ukupno*100):0}%"><i></i></span></div>`).join('');
   c.innerHTML = `
-    <div class="card"><div class="l" style="color:var(--grey);font-size:12px">UKUPNA ZAVRŠENOST OBJEKTA</div>
-      <div style="font-size:34px;font-weight:800;color:var(--blue)">${avg}%</div>
-      <div class="bar"><i style="width:${avg}%"></i></div></div>
+    <div class="card"><div class="l muted fs-xs">UKUPNA ZAVRŠENOST OBJEKTA</div>
+      <div class="fs-3xl fw-8 text-accent">${avg}%</div>
+      <div class="progress ok mt-2" style="--p:${avg}%"><i></i></div></div>
     <div class="kpis">
-      ${K(ukupno,'Ukupno jedinica','var(--navy)')}
-      ${K(spremni,'Spremni za primopredaju','var(--green)')}
-      ${K(utoku,'U toku','var(--orange)')}
-      ${K(nije,'Nije počelo','var(--grey)')}
-      ${K(odo,'Otvorene dorade','var(--red)')}
-      ${K(crit,'Kritične dorade','var(--red)')}
-      ${K(otvZad,'Otvoreni zadaci','var(--orange)')}
-      ${K(predato,'Primopredato','var(--green)')}
+      ${K(ukupno,'Ukupno jedinica','text-accent')}
+      ${K(spremni,'Spremni za primopredaju','text-ok')}
+      ${K(utoku,'U toku','text-warn')}
+      ${K(nije,'Nije počelo','muted')}
+      ${K(odo,'Otvorene dorade','text-err')}
+      ${K(crit,'Kritične dorade','text-err')}
+      ${K(otvZad,'Otvoreni zadaci','text-warn')}
+      ${K(predato,'Primopredato','text-ok')}
     </div>
-    <div class="card"><div class="l" style="color:var(--grey);font-size:12px;margin-bottom:4px">FAZE RADOVA (klik = filtriraj stanove)</div>
+    <div class="card"><div class="l muted fs-xs mb-1">FAZE RADOVA (klik = filtriraj stanove)</div>
       ${fazaBar||'<div class="muted">—</div>'}</div>`;
 }
 
@@ -297,14 +300,14 @@ function renderStanovi(){
   const fazaUsed=FAZE.filter(f=>DATA.stanovi.some(s=>(s.faza||'Grubi radovi')===f));
   let html=`<div class="filterbar">${F('all','Svi')}${F('nije','Nije spreman')}${F('ned','Nedostaci')}${F('spreman','Spremni')}${sprat.map(sp=>F('sprat:'+sp,'Sprat '+sp)).join('')}</div>`;
   html+=`<div class="filterbar">${fazaUsed.map(f=>F('faza:'+f,f)).join('')}</div>`;
-  html+=`<div style="margin:0 0 10px"><button class="badge" style="background:var(--navy);color:#fff;padding:9px 14px" onclick="openPrintDialog('all')">🖨️ Štampaj checkliste — izbor stanova (${DATA.stanovi.length})</button></div>`;
-  const fazaCol=f=>({'Grubi radovi':'var(--grey)','Instalacije':'var(--orange)','Mašinski':'var(--orange)','Završni radovi':'var(--blue)','Čišćenje':'var(--blue)','Spremno':'var(--green)'}[f]||'var(--grey)');
+  html+=`<div class="mt-0 mb-2"><button class="btn btn-sm btn-primary" onclick="openPrintDialog('all')">🖨️ Štampaj checkliste — izbor stanova (${DATA.stanovi.length})</button></div>`;
+  const fazaSem=f=>({'Instalacije':'warn','Mašinski':'warn','Završni radovi':'accent','Čišćenje':'accent','Spremno':'ok'}[f]||'');
   html+=`<div class="card">${list.map(({s,st})=>`<div class="stan" onclick="openStan('${s.id}')">
-      <div class="ozn">${s.oznaka}${s.vrsta==='poslovni'?' <span style="font-size:10px;background:var(--navy);color:#fff;border-radius:4px;padding:1px 5px;vertical-align:middle">PP</span>':''}</div>
+      <div class="ozn">${s.oznaka}${s.vrsta==='poslovni'?' <span class="fs-xs bg-accent text-inv rounded-sm py-1 px-1 align-middle">PP</span>':''}</div>
       <div class="meta">${s.kategorija?s.kategorija+' · ':''}${s.sprat?('Sprat '+s.sprat):'—'} · ${s.kvadratura?s.kvadratura+' m²':'—'}
-        <br><span class="badge" style="background:${fazaCol(s.faza||'Grubi radovi')};color:#fff;font-size:10px">${s.faza||'Grubi radovi'}</span>
-        ${st.openDor?` <span style="color:var(--red)">🛠️ ${st.openDor}</span>`:''}</div>
-      <div class="pct" style="color:${st.pct===100?'var(--green)':'var(--navy)'}">${st.pct}%</div>
+        <br><span class="badge ${fazaSem(s.faza||'Grubi radovi')}">${s.faza||'Grubi radovi'}</span>
+        ${st.openDor?` <span class="text-err">🛠️ ${st.openDor}</span>`:''}</div>
+      <div class="pct ${st.pct===100?'text-ok':'text-accent'}">${st.pct}%</div>
       <span class="pill ${st.ready?'ok':'no'}">${st.ready?'Spreman':'—'}</span>
     </div>`).join('')||'<div class="empty">Nema stanova u ovom filteru.</div>'}</div>`;
   c.innerHTML=html;
@@ -315,7 +318,7 @@ function renderIzvodaci(){
   const c=document.getElementById('content');
   const today=new Date().toISOString().slice(0,10);
   const esc=v=>(v||'').replace(/"/g,'&quot;');
-  let html=`<div style="margin:0 0 10px"><button class="badge" style="background:var(--green);color:#fff;padding:9px 14px" onclick="editIzvodjac()">➕ Dodaj izvođača</button></div>`;
+  let html=`<div class="mt-0 mb-2"><button class="btn btn-sm btn-primary" onclick="editIzvodjac()">➕ Dodaj izvođača</button></div>`;
   if(!DATA.izvodjaci.length){
     html+=`<div class="empty">Još nema izvođača. Dodaj prvog gore. 👷</div>`;
   } else {
@@ -328,22 +331,22 @@ function renderIzvodaci(){
         .forEach(d=>days.push((new Date(d.datum_zatvaranja)-new Date(d.datum_prijave))/86400000));
       const avg=days.length?(days.reduce((a,b)=>a+b,0)/days.length).toFixed(1):'—';
       const num=waNum(iz.telefon);
-      return `<div class="card" style="padding:12px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-          <div><b style="font-size:16px">${iz.ime}</b>${iz.struka?` <span class="badge" style="background:var(--greybg)">${iz.struka}</span>`:''}
-            ${iz.telefon?`<div class="muted" style="margin-top:3px">📞 ${iz.telefon}</div>`:'<div class="muted" style="margin-top:3px">— bez broja —</div>'}
-            ${iz.napomena?`<div class="muted" style="font-size:12px">${iz.napomena}</div>`:''}</div>
-          <button class="badge" style="background:var(--greybg)" onclick="editIzvodjac('${iz.id}')">✏️</button>
+      return `<div class="card p-3">
+        <div class="flex justify-between items-start gap-2">
+          <div><b class="fs-lg">${iz.ime}</b>${iz.struka?` <span class="badge bg-2">${iz.struka}</span>`:''}
+            ${iz.telefon?`<div class="muted mt-1">📞 ${iz.telefon}</div>`:'<div class="muted mt-1">— bez broja —</div>'}
+            ${iz.napomena?`<div class="muted fs-xs">${iz.napomena}</div>`:''}</div>
+          <button class="btn btn-sm" onclick="editIzvodjac('${iz.id}')">✏️</button>
         </div>
-        <div class="muted" style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap">
-          <span>🛠️ Dorade: <b style="color:${od.length?'var(--red)':'inherit'}">${od.length}</b></span>
-          <span>📋 Zadaci: <b style="color:${oz.length?'var(--orange)':'inherit'}">${oz.length}</b></span>
-          ${late?`<span style="color:var(--red)">⏰ Probijen rok: <b>${late}</b></span>`:''}
+        <div class="muted mt-2 flex gap-3 wrap">
+          <span>🛠️ Dorade: <b class="${od.length?'text-err':''}">${od.length}</b></span>
+          <span>📋 Zadaci: <b class="${oz.length?'text-warn':''}">${oz.length}</b></span>
+          ${late?`<span class="text-err">⏰ Probijen rok: <b>${late}</b></span>`:''}
           <span>⌀ ${avg} dana</span>
         </div>
-        ${num?`<a href="https://wa.me/${num}" target="_blank" class="badge" style="background:#25D366;color:#fff;display:inline-block;margin-top:8px;padding:8px 14px">📲 WhatsApp</a>
-          <a href="viber://chat?number=%2B${num}" class="badge" style="background:#7360f2;color:#fff;display:inline-block;margin-top:8px;padding:8px 14px">Viber</a>
-          <a href="tel:+${num}" class="badge" style="background:var(--navy);color:#fff;display:inline-block;margin-top:8px;padding:8px 14px">Pozovi</a>`:''}
+        ${num?`<a href="https://wa.me/${num}" target="_blank" class="btn btn-sm btn-wa mt-2">📲 WhatsApp</a>
+          <a href="viber://chat?number=%2B${num}" class="btn btn-sm btn-viber mt-2">Viber</a>
+          <a href="tel:+${num}" class="btn btn-sm btn-primary mt-2">Pozovi</a>`:''}
       </div>`;
     }).join('');
   }
@@ -359,26 +362,26 @@ function editIzvodjac(id){
     <datalist id="strukalist"><option value="Keramičar"><option value="Moler"><option value="Vodoinstalater"><option value="Električar"><option value="Stolar"><option value="Parketar"><option value="Gipsar"><option value="Bravar"><option value="Klima/grijanje"><option value="Fasader"></datalist>
     <label>Telefon</label><input id="iz_tel" type="tel" value="${esc(iz.telefon)}" placeholder="067 123 456">
     <label>Napomena</label><input id="iz_nap" value="${esc(iz.napomena)}" placeholder="opciono">
-    <button class="btn" onclick="saveIzvodjac(${id?`'${id}'`:'null'})">Sačuvaj</button>
-    ${id?`<button class="btn ghost" style="color:var(--red);border-color:var(--red)" onclick="delIzvodjac('${id}','${esc(iz.ime)}')">Obriši</button>`:''}
-    <button class="btn ghost" onclick="closeModal()">Otkaži</button></div>`;
+    <button class="btn btn-primary" onclick="saveIzvodjac(${id?`'${id}'`:'null'})">Sačuvaj</button>
+    ${id?`<button class="btn btn-danger" onclick="delIzvodjac('${id}','${esc(iz.ime)}')">Obriši</button>`:''}
+    <button class="btn" onclick="closeModal()">Otkaži</button></div>`;
   modal.onclick=e=>{ if(e.target===modal) closeModal(); };
   document.body.appendChild(modal);
 }
 async function saveIzvodjac(id){
   const rec={ ime:val('iz_ime'), struka:val('iz_struka')||null, telefon:val('iz_tel')||null, napomena:val('iz_nap')||null };
-  if(!rec.ime){ alert('Unesi ime.'); return; }
+  if(!rec.ime){ ui.toast('Unesi ime.',{type:'err'}); return; }
   closeModal();
   const { error }= id ? await sb.from('izvodjaci').update(rec).eq('id',id)
                       : await sb.from('izvodjaci').insert(rec);
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   await loadAll(); render();
 }
 async function delIzvodjac(id,ime){
-  if(!confirm('Obrisati izvođača '+ime+'? (Dorade/zadaci ostaju, samo se odveže.)')) return;
+  if(!await ui.confirm({title:'Brisanje',text:'Obrisati izvođača '+ime+'? (Dorade/zadaci ostaju, samo se odveže.)',ok:'Obriši',cancel:'Odustani',danger:true})) return;
   closeModal();
   const { error }=await sb.from('izvodjaci').delete().eq('id',id);
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   await loadAll(); render();
 }
 
@@ -389,21 +392,21 @@ function renderStan(){
   const c=document.getElementById('content');
   const open = DATA.dorade.filter(d=>d.stan_id===s.id && OPEN_STAT(d.status));
   let html = `<div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div><b style="font-size:18px">${st.pct}%</b> završeno
-        <span class="pill ${st.ready?'ok':'no'}" style="margin-left:6px">${st.ready?'Spreman':'Nije spreman'}</span></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-        <button class="badge" style="background:var(--greybg)" onclick="editStan('${s.id}')">⚙️ Podaci</button>
-        <button class="badge" style="background:var(--navy);color:#fff" onclick="openPrintDialog('${s.id}')">🖨️ Checklista</button>
-        <button class="badge" style="background:var(--blue);color:#fff" onclick="renderZapisnik('${s.id}')">📄 Zapisnik</button>
+    <div class="flex justify-between items-center">
+      <div><b class="fs-lg">${st.pct}%</b> završeno
+        <span class="pill ${st.ready?'ok':'no'} ml-2">${st.ready?'Spreman':'Nije spreman'}</span></div>
+      <div class="flex gap-2 wrap justify-end">
+        <button class="btn btn-sm" onclick="editStan('${s.id}')">⚙️ Podaci</button>
+        <button class="btn btn-sm btn-primary" onclick="openPrintDialog('${s.id}')">🖨️ Checklista</button>
+        <button class="btn btn-sm btn-primary" onclick="renderZapisnik('${s.id}')">📄 Zapisnik</button>
       </div>
     </div>
-    <div class="bar" style="margin-top:8px"><i style="width:${st.pct}%"></i></div>
-    <div class="muted" style="margin-top:6px">
+    <div class="progress ok mt-2" style="--p:${st.pct}%"><i></i></div>
+    <div class="muted mt-2">
       <b>${s.vrsta==='poslovni'?'🏪 Poslovni prostor':'🏠 Stan'}</b>${s.kategorija?(' · '+s.kategorija):''}${s.vrsta!=='poslovni'?(' · Grijanje: '+(s.tip_grijanja||'—')):''}
       · Faza: <b>${s.faza||'Grubi radovi'}</b>
-      · Otvorenih dorada: <b style="color:${open.length?'var(--red)':'inherit'}">${open.length}</b>
-      ${s.opis?`<br><span style="font-size:12px">${s.opis}</span>`:''}</div>
+      · Otvorenih dorada: <b class="${open.length?'text-err':''}">${open.length}</b>
+      ${s.opis?`<br><span class="fs-xs">${s.opis}</span>`:''}</div>
   </div>`;
   const appl=applicableStavke(s);
   rooms().forEach(room=>{
@@ -437,8 +440,8 @@ function pickStatus(stavkaId){
     <textarea id="np" rows="2" placeholder="npr. šta tačno fali">${note}</textarea>
     <label>Tvoje ime (opciono)</label>
     <input id="ime" placeholder="ko provjerava">
-    ${cur?`<button class="btn ghost" style="color:var(--red);border-color:var(--red)" onclick="resetStatus(${stavkaId})">↺ Poništi (vrati na neprovjereno)</button>`:''}
-    <button class="btn ghost" onclick="closeModal()">Otkaži</button>
+    ${cur?`<button class="btn btn-danger" onclick="resetStatus(${stavkaId})">↺ Poništi (vrati na neprovjereno)</button>`:''}
+    <button class="btn" onclick="closeModal()">Otkaži</button>
   </div>`;
   modal.onclick=e=>{ if(e.target===modal) closeModal(); };
   document.body.appendChild(modal);
@@ -449,7 +452,7 @@ async function resetStatus(stavkaId){
   // ukloni auto-kreiranu doradu SAMO ako je netaknuta (status Otvoreno) — da ne briše započet rad
   await sb.from('dorade').delete().eq('stan_id',curStan.id).eq('stavka_id',stavkaId).eq('status','Otvoreno');
   const { error } = await sb.from('provjere').delete().eq('stan_id',curStan.id).eq('stavka_id',stavkaId);
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   await loadAll(); render();
 }
 async function setStatus(stavkaId,status){
@@ -459,7 +462,7 @@ async function setStatus(stavkaId,status){
   const { error } = await sb.from('provjere').upsert(
     { stan_id:curStan.id, stavka_id:stavkaId, status, napomena, ime },
     { onConflict:'stan_id,stavka_id' });
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   await loadAll(); render();
 }
 
@@ -488,8 +491,8 @@ function editStan(id){
       ${FAZE.map(o=>`<option ${(s.faza||'Grubi radovi')===o?'selected':''}>${o}</option>`).join('')}</select>
     <label>Status primopredaje</label><select id="e_st">
       ${['Čeka','Zakazana','Primopredato','Odbijena'].map(o=>`<option ${s.status_primopredaje===o?'selected':''}>${o}</option>`).join('')}</select>
-    <button class="btn" onclick="saveStan('${id}')">Sačuvaj</button>
-    <button class="btn ghost" onclick="closeModal()">Otkaži</button></div>`;
+    <button class="btn btn-primary" onclick="saveStan('${id}')">Sačuvaj</button>
+    <button class="btn" onclick="closeModal()">Otkaži</button></div>`;
   modal.onclick=e=>{ if(e.target===modal) closeModal(); };
   document.body.appendChild(modal);
 }
@@ -499,7 +502,7 @@ async function saveStan(id){
     vrsta:val('e_vrsta')||'stan', kategorija:val('e_kat')||null, opis:val('e_opis')||null, faza:val('e_faza')||'Grubi radovi' };
   closeModal();
   const { error }=await sb.from('stanovi').update(patch).eq('id',id);
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   await loadAll(); if(curStan&&curStan.id===id) curStan={...curStan,...patch}; render();
 }
 const val=id=>{ const e=document.getElementById(id); return e?e.value.trim():''; };
@@ -539,6 +542,7 @@ function renderZapisnik(stanId){
 }
 function closeZapisnik(){ const z=document.getElementById('zapisnik'); if(z) z.remove(); }
 // ====== ŠTAMPA: samostalni CSS + štampa preko skrivenog iframe-a (pouzdano, ne prazno) ======
+/* ui-provjera:izuzeto — štampani dokument ima fiksnu crno-bijelu paletu, van teme aplikacije */
 const PRINT_CSS = `
 *{box-sizing:border-box}
 .pdoc{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;font-size:12px;line-height:1.35}
@@ -571,31 +575,32 @@ function buildPrintDoc(inner){
     +PRINT_CSS
     +'</style></head><body>'+inner+'</body></html>';
 }
+/* ui-provjera:kraj */
 // PREVIEW + ŠTAMPA: vidljiv preko-cijelog-ekrana iframe (preview) + dugmad u traci iznad.
 // Vidljiv iframe se štampa pouzdano (skriveni/offscreen iframe i fixed-overlay daju prazno).
 function printHTML(inner){
   const doc=buildPrintDoc(inner);
   let wrap=document.getElementById('pwrap'); if(wrap) wrap.remove();
   wrap=document.createElement('div'); wrap.id='pwrap';
-  wrap.style.cssText='position:fixed;inset:0;z-index:99999;background:#fff;display:flex;flex-direction:column';
+  wrap.className='pwrap';
   // traka sa kontrolama (parent, ne ulazi u štampu)
   const bar=document.createElement('div');
-  bar.style.cssText='display:flex;gap:8px;align-items:center;background:#1F3864;padding:8px 10px;flex:0 0 auto';
-  bar.innerHTML='<span style="color:#fff;font-weight:600;flex:1;font-size:14px">👁️ Pregled — provjeri pa štampaj</span>';
+  bar.className='flex items-center gap-2 p-2 bg-surface border-b shrink-0';
+  bar.innerHTML='<span class="fw-6 flex-1">👁️ Pregled — provjeri pa štampaj</span>';
   const pbtn=document.createElement('button'); pbtn.textContent='🖨️ Štampaj / Sačuvaj PDF';
-  pbtn.style.cssText='background:#2e7d32;color:#fff;border:0;border-radius:7px;padding:10px 14px;font-size:14px;font-weight:700';
+  pbtn.className='btn btn-sm btn-primary';
   const cbtn=document.createElement('button'); cbtn.textContent='✕ Zatvori';
-  cbtn.style.cssText='background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:7px;padding:10px 12px;font-size:14px';
+  cbtn.className='btn btn-sm';
   bar.appendChild(pbtn); bar.appendChild(cbtn);
   // iframe = sam preview (vidljiv); puni se preko Blob URL-a (pouzdano)
   const f=document.createElement('iframe');
-  f.style.cssText='flex:1 1 auto;width:100%;border:0;background:#fff';
+  f.className='flex-1 w-full border-0';
   let url=null;
   try{ url=URL.createObjectURL(new Blob([doc],{type:'text/html'})); f.src=url; }
   catch(e){ f.setAttribute('srcdoc', doc); }
   cbtn.onclick=()=>{ wrap.remove(); if(url){ try{URL.revokeObjectURL(url);}catch(e){} } };
   pbtn.onclick=()=>{ try{ f.contentWindow.focus(); f.contentWindow.print(); }
-    catch(e){ alert('Štampa nije uspjela: '+e.message); } };
+    catch(e){ ui.toast('Štampa nije uspjela: '+e.message,{type:'err'}); } };
   wrap.appendChild(bar); wrap.appendChild(f); document.body.appendChild(wrap);
 }
 
@@ -617,30 +622,30 @@ function openPrintDialog(preselect){
   const m=document.createElement('div'); m.className='modal';
   m.innerHTML=`<div class="sheet">
     <h3>🖨️ Štampa checkliste</h3>
-    <label style="font-weight:600;font-size:13px;color:var(--grey)">Šta da štampam?</label>
+    <label class="fw-6 fs-sm muted">Šta da štampam?</label>
     <div class="opt">
       <button id="pm_blank" class="pm active" onclick="pmSet('blank')">📝 Prazna polja<br><small>za ručnu kontrolu</small></button>
       <button id="pm_data" class="pm" onclick="pmSet('data')">📊 Sa podacima<br><small>povuci trenutno stanje</small></button>
     </div>
-    <label style="font-weight:600;font-size:13px;color:var(--grey)">Uključi u štampu</label>
-    <div style="margin:4px 0 8px">
-      <label style="display:flex;gap:8px;align-items:center;font-size:14px;padding:3px 0"><input type="checkbox" id="pi_status" checked style="width:auto"> Status kolone (OK / NE / N/P)</label>
-      <label style="display:flex;gap:8px;align-items:center;font-size:14px;padding:3px 0"><input type="checkbox" id="pi_nap" checked style="width:auto"> Napomene</label>
-      <label style="display:flex;gap:8px;align-items:center;font-size:14px;padding:3px 0"><input type="checkbox" id="pi_issues" style="width:auto"> Samo stavke s nedostatkom (NE / dorada) <span class="muted">— sa podacima</span></label>
+    <label class="fw-6 fs-sm muted">Uključi u štampu</label>
+    <div class="mt-1 mb-2">
+      <label class="flex gap-2 items-center fs-base py-1 px-0"><input type="checkbox" id="pi_status" checked class="w-auto"> Status kolone (OK / NE / N/P)</label>
+      <label class="flex gap-2 items-center fs-base py-1 px-0"><input type="checkbox" id="pi_nap" checked class="w-auto"> Napomene</label>
+      <label class="flex gap-2 items-center fs-base py-1 px-0"><input type="checkbox" id="pi_issues" class="w-auto"> Samo stavke s nedostatkom (NE / dorada) <span class="muted">— sa podacima</span></label>
     </div>
-    <label style="font-weight:600;font-size:13px;color:var(--grey)">Koje jedinice?
-      <a onclick="pmAll(true)" style="color:var(--blue);cursor:pointer;font-weight:600">sve</a> ·
-      <a onclick="pmAll(false)" style="color:var(--blue);cursor:pointer;font-weight:600">nijedan</a>
+    <label class="fw-6 fs-sm muted">Koje jedinice?
+      <a onclick="pmAll(true)" class="text-accent clickable fw-6">sve</a> ·
+      <a onclick="pmAll(false)" class="text-accent clickable fw-6">nijedan</a>
     </label>
-    ${sprat.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">
-      ${sprat.map(sp=>`<button type="button" class="filterbar" style="border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 11px;font-size:12px" onclick="pmFloor('${sp}')">Sprat ${sp}</button>`).join('')}</div>`:''}
-    <div id="pmlist" style="max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:9px;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:6px">
-      ${DATA.stanovi.map(s=>`<label style="display:flex;gap:7px;align-items:center;font-size:14px;padding:3px;cursor:pointer">
-        <input type="checkbox" class="pmck" value="${s.id}" data-sprat="${s.sprat||''}" ${pre.includes(s.id)?'checked':''} style="width:auto">
+    ${sprat.length?`<div class="flex gap-2 wrap mt-2 mb-2">
+      ${sprat.map(sp=>`<button type="button" class="filterbar border bg-surface rounded-full py-1 px-3 fs-xs" onclick="pmFloor('${sp}')">Sprat ${sp}</button>`).join('')}</div>`:''}
+    <div id="pmlist" class="scroll-box grid-2 gap-1 mt-2">
+      ${DATA.stanovi.map(s=>`<label class="flex gap-2 items-center fs-base p-1 clickable">
+        <input type="checkbox" class="pmck w-auto" value="${s.id}" data-sprat="${s.sprat||''}" ${pre.includes(s.id)?'checked':''}>
         <span>${s.oznaka}${s.vrsta==='poslovni'?' (PP)':''}${s.sprat?` <span class="muted">· ${s.sprat}</span>`:''}</span></label>`).join('')}
     </div>
-    <button class="btn" onclick="doPrintChecklist()">🖨️ Štampaj / Sačuvaj PDF</button>
-    <button class="btn ghost" onclick="closeModal()">Otkaži</button>
+    <button class="btn btn-primary" onclick="doPrintChecklist()">🖨️ Štampaj / Sačuvaj PDF</button>
+    <button class="btn" onclick="closeModal()">Otkaži</button>
   </div>`;
   m.addEventListener('click',e=>{ if(e.target===m) closeModal(); });
   document.body.appendChild(m);
@@ -653,7 +658,7 @@ function pmAll(v){ document.querySelectorAll('.pmck').forEach(c=>c.checked=v); }
 function pmFloor(sp){ document.querySelectorAll('.pmck').forEach(c=>{ if(c.dataset.sprat===(''+sp)) c.checked=true; }); }
 function doPrintChecklist(){
   const ids=[...document.querySelectorAll('.pmck:checked')].map(c=>c.value); // uuid string — NE coerce u broj
-  if(!ids.length){ alert('Izaberi bar jednu jedinicu.'); return; }
+  if(!ids.length){ ui.toast('Izaberi bar jednu jedinicu.',{type:'err'}); return; }
   const opts={ mode:window._pmMode||'blank',
     status:document.getElementById('pi_status').checked,
     napomene:document.getElementById('pi_nap').checked,
@@ -696,7 +701,7 @@ function printChecklist(ids,opts){
       });
       if(roomsHtml) secHtml+=`<div class="psec">${sec.name}</div>${roomsHtml}`;
     });
-    if(!secHtml) secHtml=`<p style="font-size:12px">Nema stavki za prikaz u ovom filteru.</p>`;
+    if(!secHtml) secHtml=`<p class="fs-xs">Nema stavki za prikaz u ovom filteru.</p>`;
     body+=`<div class="pg">
       <h2 class="pttl">CHECKLISTA ZAVRŠNIH RADOVA${s.vrsta==='poslovni'?' — POSLOVNI PROSTOR':''}${mode==='data'?' — STANJE':''}</h2>
       ${mode==='data'?'<div class="pleg">✓ OK · ✗ nije u redu · 🛠 u doradi · N/P ne primjenjuje se</div>':''}
@@ -728,8 +733,8 @@ async function saveZapisnik(id){
     brojilo_struja:val('z_struja')||null, brojilo_voda:val('z_voda')||null,
     broj_kljuceva:val('z_kljuc')||null, napomena_primopredaja:val('z_nap')||null };
   const { error }=await sb.from('stanovi').update(patch).eq('id',id);
-  if(error){ alert('Greška: '+error.message); return; }
-  await loadAll(); alert('Sačuvano ✓');
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
+  await loadAll(); ui.toast('Sačuvano ✓');
 }
 
 // ---------- ZADACI / RADNI NALOZI ----------
@@ -743,23 +748,23 @@ function renderZadaci(){
   if(zadFilter==='open') list=list.filter(OPENZ);
   else if(zadFilter==='late') list=list.filter(z=>OPENZ(z)&&z.rok&&z.rok<today);
   const F=(k,l)=>`<button class="${zadFilter===k?'active':''}" onclick="setZadFilter('${k}')">${l}</button>`;
-  let html=`<div style="margin:0 0 10px"><button class="badge" style="background:var(--green);color:#fff;padding:9px 14px" onclick="editZadatak()">➕ Novi zadatak</button></div>`;
+  let html=`<div class="mt-0 mb-2"><button class="btn btn-sm btn-primary" onclick="editZadatak()">➕ Novi zadatak</button></div>`;
   html+=`<div class="filterbar">${F('open','Otvoreni')}${F('late','Probijen rok')}${F('all','Svi')}</div>`;
   if(!list.length) html+=`<div class="empty">Nema zadataka u ovom filteru. 📋</div>`;
   list.forEach(z=>{
     const stan=DATA.stanovi.find(s=>s.id===z.stan_id);
     const late=z.rok&&OPENZ(z)&&z.rok<today;
-    const pcol=z.prioritet==='Kritičan'?'var(--red)':z.prioritet==='Visok'?'var(--orange)':'var(--grey)';
-    const scol=z.status==='Završen'?'var(--green)':z.status==='U toku'?'var(--blue)':z.status==='Otkazan'?'var(--grey)':'var(--orange)';
-    html+=`<div class="dorada" style="border-left-color:${pcol}" onclick="editZadatak('${z.id}')">
+    const pcol=z.prioritet==='Kritičan'?'err':z.prioritet==='Visok'?'warn':'muted';
+    const scol=z.status==='Završen'?'ok':z.status==='U toku'?'accent':z.status==='Otkazan'?'':'warn';
+    html+=`<div class="dorada p-${pcol}" onclick="editZadatak('${z.id}')">
       <div class="top"><span><b>${z.naziv}</b></span>
-        <span class="badge" style="background:${scol};color:#fff">${z.status}</span></div>
-      <div class="muted" style="margin-top:4px">
+        <span class="badge ${scol}">${z.status}</span></div>
+      <div class="muted mt-1">
         ${stan?'🏢 '+stan.oznaka+' · ':''}${z.izvodjac_id?'👷 '+izvName(z.izvodjac_id)+' · ':''}
-        <span class="badge" style="background:var(--greybg)">${z.prioritet}</span>
-        ${z.rok?` · <span style="color:${late?'var(--red)':'inherit'}">📅 ${z.rok}${late?' ⏰':''}</span>`:''}</div>
-      ${z.opis?`<div class="muted" style="font-size:12px;margin-top:3px">${z.opis}</div>`:''}
-      ${z.foto?`<div class="muted" style="font-size:12px;margin-top:3px">📷 ima sliku</div>`:''}
+        <span class="badge bg-2">${z.prioritet}</span>
+        ${z.rok?` · <span class="${late?'text-err':''}">📅 ${z.rok}${late?' ⏰':''}</span>`:''}</div>
+      ${z.opis?`<div class="muted fs-xs mt-1">${z.opis}</div>`:''}
+      ${z.foto?`<div class="muted fs-xs mt-1">📷 ima sliku</div>`:''}
     </div>`;
   });
   c.innerHTML=html;
@@ -782,16 +787,16 @@ function editZadatak(id){
     <label>Rok</label><input id="z_rok" type="date" value="${z.rok||''}">
     <label>Status</label><select id="z_st">${['Otvoren','U toku','Završen','Otkazan'].map(o=>`<option ${z.status===o?'selected':''}>${o}</option>`).join('')}</select>
     ${id?`<label>📷 Foto</label><input type="file" accept="image/*" capture="environment" onchange="upPhoto(this,'${id}','foto','zadaci')">
-      ${z.foto?`<div style="margin-top:4px"><a href="${z.foto}" target="_blank" class="muted">otvori sliku</a></div>`:''}`:'<div class="muted" style="font-size:12px;margin-top:6px">Sliku dodaješ nakon što sačuvaš zadatak.</div>'}
-    ${num?`<a href="https://wa.me/${num}?text=${encodeURIComponent('Radni nalog: '+(z.naziv||'')+(z.rok?' (rok '+z.rok+')':''))}" target="_blank" class="badge" style="background:#25D366;color:#fff;display:inline-block;margin:8px 0">📲 Pošalji izvođaču</a>`:''}
-    <button class="btn" onclick="saveZadatak(${id?`'${id}'`:'null'})">Sačuvaj</button>
-    ${id?`<button class="btn ghost" style="color:var(--red);border-color:var(--red)" onclick="delZadatak('${id}')">Obriši</button>`:''}
-    <button class="btn ghost" onclick="closeModal()">Otkaži</button></div>`;
+      ${z.foto?`<div class="mt-1"><a href="${z.foto}" target="_blank" class="muted">otvori sliku</a></div>`:''}`:'<div class="muted fs-xs mt-2">Sliku dodaješ nakon što sačuvaš zadatak.</div>'}
+    ${num?`<a href="https://wa.me/${num}?text=${encodeURIComponent('Radni nalog: '+(z.naziv||'')+(z.rok?' (rok '+z.rok+')':''))}" target="_blank" class="btn btn-sm btn-wa my-2">📲 Pošalji izvođaču</a>`:''}
+    <button class="btn btn-primary" onclick="saveZadatak(${id?`'${id}'`:'null'})">Sačuvaj</button>
+    ${id?`<button class="btn btn-danger" onclick="delZadatak('${id}')">Obriši</button>`:''}
+    <button class="btn" onclick="closeModal()">Otkaži</button></div>`;
   modal.onclick=e=>{ if(e.target===modal) closeModal(); };
   document.body.appendChild(modal);
 }
 async function saveZadatak(id){
-  const naziv=val('z_naziv'); if(!naziv){ alert('Unesi naziv zadatka.'); return; }
+  const naziv=val('z_naziv'); if(!naziv){ ui.toast('Unesi naziv zadatka.',{type:'err'}); return; }
   const status=val('z_st');
   const rec={ naziv, opis:val('z_opis')||null, stan_id:val('z_stan')||null, izvodjac_id:val('z_izv')||null,
     prioritet:val('z_pri'), rok:val('z_rok')||null, status,
@@ -799,14 +804,14 @@ async function saveZadatak(id){
   closeModal();
   const { error }= id ? await sb.from('zadaci').update(rec).eq('id',id)
                       : await sb.from('zadaci').insert(rec);
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   await loadAll(); render();
 }
 async function delZadatak(id){
-  if(!confirm('Obrisati ovaj zadatak?')) return;
+  if(!await ui.confirm({title:'Brisanje',text:'Obrisati ovaj zadatak?',ok:'Obriši',cancel:'Odustani',danger:true})) return;
   closeModal();
   const { error }=await sb.from('zadaci').delete().eq('id',id);
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   await loadAll(); render();
 }
 
@@ -814,17 +819,17 @@ async function delZadatak(id){
 function renderDnevnik(){
   app.innerHTML = chrome('Dnevnik', false);
   const c=document.getElementById('content');
-  let html=`<div style="margin:0 0 10px;display:flex;gap:8px;flex-wrap:wrap">
-    <button class="badge" style="background:var(--green);color:#fff;padding:9px 14px" onclick="editDnevnik()">➕ Novi unos</button>
-    <button class="badge" style="background:var(--navy);color:#fff;padding:9px 14px" onclick="izvjestajZgrade()">📄 Izvještaj investitoru</button></div>`;
+  let html=`<div class="mt-0 mb-2 flex gap-2 wrap">
+    <button class="btn btn-sm btn-primary" onclick="editDnevnik()">➕ Novi unos</button>
+    <button class="btn btn-sm btn-primary" onclick="izvjestajZgrade()">📄 Izvještaj investitoru</button></div>`;
   if(!DATA.dnevnik.length) html+=`<div class="empty">Još nema unosa u dnevnik. 📒</div>`;
-  html+=DATA.dnevnik.map(e=>`<div class="card" style="padding:12px" onclick="editDnevnik('${e.id}')">
-      <div style="display:flex;justify-content:space-between"><b>📅 ${e.datum}</b>${e.vrijeme?`<span class="muted">${e.vrijeme}</span>`:''}</div>
-      ${e.ekipe?`<div style="margin-top:4px"><b class="muted">Ekipe:</b> ${e.ekipe}</div>`:''}
-      ${e.uradjeno?`<div style="margin-top:2px">${e.uradjeno}</div>`:''}
-      ${e.isporuke?`<div class="muted" style="margin-top:2px">📦 ${e.isporuke}</div>`:''}
-      ${e.problemi?`<div style="margin-top:2px;color:var(--red)">⚠️ ${e.problemi}</div>`:''}
-      ${e.foto?`<div class="muted" style="font-size:12px;margin-top:3px">📷 ima sliku</div>`:''}
+  html+=DATA.dnevnik.map(e=>`<div class="card p-3" onclick="editDnevnik('${e.id}')">
+      <div class="flex justify-between"><b>📅 ${e.datum}</b>${e.vrijeme?`<span class="muted">${e.vrijeme}</span>`:''}</div>
+      ${e.ekipe?`<div class="mt-1"><b class="muted">Ekipe:</b> ${e.ekipe}</div>`:''}
+      ${e.uradjeno?`<div class="mt-1">${e.uradjeno}</div>`:''}
+      ${e.isporuke?`<div class="muted mt-1">📦 ${e.isporuke}</div>`:''}
+      ${e.problemi?`<div class="mt-1 text-err">⚠️ ${e.problemi}</div>`:''}
+      ${e.foto?`<div class="muted fs-xs mt-1">📷 ima sliku</div>`:''}
     </div>`).join('');
   c.innerHTML=html;
 }
@@ -841,10 +846,10 @@ function editDnevnik(id){
     <label>Isporuke materijala</label><textarea id="dn_isporuke" rows="2">${e.isporuke||''}</textarea>
     <label>Problemi / zastoji</label><textarea id="dn_problemi" rows="2">${e.problemi||''}</textarea>
     ${id?`<label>📷 Foto</label><input type="file" accept="image/*" capture="environment" onchange="upPhoto(this,'${id}','foto','dnevnik')">
-      ${e.foto?`<div style="margin-top:4px"><a href="${e.foto}" target="_blank" class="muted">otvori sliku</a></div>`:''}`:'<div class="muted" style="font-size:12px;margin-top:6px">Sliku dodaješ nakon što sačuvaš unos.</div>'}
-    <button class="btn" onclick="saveDnevnik(${id?`'${id}'`:'null'})">Sačuvaj</button>
-    ${id?`<button class="btn ghost" style="color:var(--red);border-color:var(--red)" onclick="delDnevnik('${id}')">Obriši</button>`:''}
-    <button class="btn ghost" onclick="closeModal()">Otkaži</button></div>`;
+      ${e.foto?`<div class="mt-1"><a href="${e.foto}" target="_blank" class="muted">otvori sliku</a></div>`:''}`:'<div class="muted fs-xs mt-2">Sliku dodaješ nakon što sačuvaš unos.</div>'}
+    <button class="btn btn-primary" onclick="saveDnevnik(${id?`'${id}'`:'null'})">Sačuvaj</button>
+    ${id?`<button class="btn btn-danger" onclick="delDnevnik('${id}')">Obriši</button>`:''}
+    <button class="btn" onclick="closeModal()">Otkaži</button></div>`;
   modal.onclick=ev=>{ if(ev.target===modal) closeModal(); };
   document.body.appendChild(modal);
 }
@@ -855,14 +860,14 @@ async function saveDnevnik(id){
   closeModal();
   const { error }= id ? await sb.from('dnevnik').update(rec).eq('id',id)
                       : await sb.from('dnevnik').insert(rec);
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   await loadAll(); render();
 }
 async function delDnevnik(id){
-  if(!confirm('Obrisati ovaj unos iz dnevnika?')) return;
+  if(!await ui.confirm({title:'Brisanje',text:'Obrisati ovaj unos iz dnevnika?',ok:'Obriši',cancel:'Odustani',danger:true})) return;
   closeModal();
   const { error }=await sb.from('dnevnik').delete().eq('id',id);
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   await loadAll(); render();
 }
 // Izvještaj o napretku za investitora (PDF preko printHTML)
@@ -912,16 +917,16 @@ function renderDorade(){
   if(!list.length) html+=`<div class="empty">Nema dorada u ovom filteru. 🎉</div>`;
   list.forEach(d=>{
     const late=d.rok&&OPEN_STAT(d.status)&&d.rok<new Date().toISOString().slice(0,10);
-    const pcol=d.prioritet==='Kritičan'?'var(--red)':d.prioritet==='Visok'?'var(--orange)':'var(--grey)';
+    const pcol=d.prioritet==='Kritičan'?'err':d.prioritet==='Visok'?'warn':'';
     html+=`<div class="dorada ${d.prioritet==='Kritičan'?'crit':''}" onclick="editDorada('${d.id}')">
       <div class="top"><span><b>${stanOzn(d.stan_id)}</b> · ${d.prostorija||''}</span>
-        <span class="badge" style="background:${pcol};color:#fff">${d.prioritet}</span></div>
+        <span class="badge ${pcol}">${d.prioritet}</span></div>
       <div class="d">${d.detalj||d.opis||'—'}</div>
       ${d.opis&&d.detalj?`<div class="muted">${d.opis}</div>`:''}
-      <div class="muted" style="margin-top:4px">
+      <div class="muted mt-1">
         ${d.izvodjac?('👷 '+d.izvodjac+' · '):''}
-        <span class="badge" style="background:var(--greybg)">${d.status}</span>
-        ${d.rok?` · rok ${fmt(d.rok)}${late?' <b style="color:var(--red)">⚠ probijen</b>':''}`:''}</div>
+        <span class="badge bg-2">${d.status}</span>
+        ${d.rok?` · rok ${fmt(d.rok)}${late?' <b class="text-err">⚠ probijen</b>':''}`:''}</div>
     </div>`;
   });
   c.innerHTML=html;
@@ -936,7 +941,7 @@ function editDorada(id){
     <label>Opis problema</label><textarea id="d_opis" rows="2">${d.opis||''}</textarea>
     <label>Izvođač zadužen</label><input id="d_izv" list="izvlist" value="${d.izvodjac||''}" placeholder="izaberi ili upiši">
     <datalist id="izvlist">${DATA.izvodjaci.map(i=>`<option value="${i.ime}">`).join('')}</datalist>
-    ${(()=>{ const iz=izvByName(d.izvodjac); const n=iz&&waNum(iz.telefon); return n?`<a href="https://wa.me/${n}?text=${encodeURIComponent('Dorada — '+(DATA.stanovi.find(s=>s.id===d.stan_id)||{}).oznaka+(d.prostorija?' · '+d.prostorija:'')+': '+(d.detalj||d.opis||'')+(d.rok?' (rok '+d.rok+')':''))}" target="_blank" class="badge" style="background:#25D366;color:#fff;display:inline-block;margin:4px 0">📲 Pošalji majstoru</a>`:''; })()}
+    ${(()=>{ const iz=izvByName(d.izvodjac); const n=iz&&waNum(iz.telefon); return n?`<a href="https://wa.me/${n}?text=${encodeURIComponent('Dorada — '+(DATA.stanovi.find(s=>s.id===d.stan_id)||{}).oznaka+(d.prostorija?' · '+d.prostorija:'')+': '+(d.detalj||d.opis||'')+(d.rok?' (rok '+d.rok+')':''))}" target="_blank" class="btn btn-sm btn-wa my-1">📲 Pošalji majstoru</a>`:''; })()}
     <label>Prioritet</label><select id="d_pri">
       ${['Normalan','Visok','Kritičan'].map(o=>`<option ${d.prioritet===o?'selected':''}>${o}</option>`).join('')}</select>
     <label>Rok</label><input id="d_rok" type="date" value="${d.rok||''}">
@@ -944,15 +949,15 @@ function editDorada(id){
       ${['Otvoreno','U doradi','Popravljeno - čeka kontrolu','Provjereno OK','Odustalo'].map(o=>`<option ${d.status===o?'selected':''}>${o}</option>`).join('')}</select>
     <label>Kontrolisao</label><input id="d_kon" value="${d.kontrolisao||''}">
     <label>📷 Foto prije (problem)</label><input type="file" accept="image/*" capture="environment" onchange="upPhoto(this,'${id}','foto_prije')">
-    ${d.foto_prije?`<div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+    ${d.foto_prije?`<div class="flex gap-2 items-center mt-1">
       <a href="${d.foto_prije}" target="_blank" class="muted">otvori sliku</a>
-      <button class="badge" style="background:var(--green);color:#fff" onclick="shareFoto('${id}','foto_prije')">📤 Pošalji majstoru</button></div>`:''}
+      <button class="btn btn-sm btn-primary" onclick="shareFoto('${id}','foto_prije')">📤 Pošalji majstoru</button></div>`:''}
     <label>📷 Foto poslije (popravljeno)</label><input type="file" accept="image/*" capture="environment" onchange="upPhoto(this,'${id}','foto_poslije')">
-    ${d.foto_poslije?`<div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+    ${d.foto_poslije?`<div class="flex gap-2 items-center mt-1">
       <a href="${d.foto_poslije}" target="_blank" class="muted">otvori sliku</a>
-      <button class="badge" style="background:var(--green);color:#fff" onclick="shareFoto('${id}','foto_poslije')">📤 Pošalji majstoru</button></div>`:''}
-    <button class="btn" onclick="saveDorada('${id}')">Sačuvaj</button>
-    <button class="btn ghost" onclick="closeModal()">Otkaži</button></div>`;
+      <button class="btn btn-sm btn-primary" onclick="shareFoto('${id}','foto_poslije')">📤 Pošalji majstoru</button></div>`:''}
+    <button class="btn btn-primary" onclick="saveDorada('${id}')">Sačuvaj</button>
+    <button class="btn" onclick="closeModal()">Otkaži</button></div>`;
   modal.onclick=e=>{ if(e.target===modal) closeModal(); };
   document.body.appendChild(modal);
 }
@@ -963,7 +968,7 @@ async function saveDorada(id){
     datum_zatvaranja:(status==='Provjereno OK'||status==='Odustalo')?new Date().toISOString():null };
   closeModal();
   const { error }=await sb.from('dorade').update(patch).eq('id',id);
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   await loadAll(); render();
 }
 async function upPhoto(inp,id,field,table){
@@ -971,12 +976,12 @@ async function upPhoto(inp,id,field,table){
   const f=inp.files[0]; if(!f) return;
   const path=`${table}/${id}/${field}_${Date.now()}.jpg`;
   const { error }=await sb.storage.from('fotografije').upload(path,f,{upsert:true});
-  if(error){ alert('Upload greška: '+error.message); return; }
+  if(error){ ui.toast('Upload greška: '+error.message,{type:'err'}); return; }
   const { data }=sb.storage.from('fotografije').getPublicUrl(path);
   await sb.from(table).update({[field]:data.publicUrl}).eq('id',id);
   await loadAll();
-  if(table==='dorade' && confirm('Slika sačuvana ✓\nPoslati je odmah majstoru (Viber / WhatsApp)?')) shareFoto(id,field,f);
-  else { alert('Slika sačuvana ✓'); if(document.querySelector('.modal')) render(); }
+  if(table==='dorade' && await ui.confirm({title:'Slika sačuvana ✓',text:'Poslati je odmah majstoru (Viber / WhatsApp)?',ok:'Pošalji',cancel:'Ne sada'})) shareFoto(id,field,f);
+  else { ui.toast('Slika sačuvana ✓'); if(document.querySelector('.modal')) render(); }
 }
 // Proslijedi sliku + opis majstoru preko native share sheet-a (Viber/WhatsApp/...).
 async function shareFoto(id, field, fileObj){
@@ -1009,57 +1014,57 @@ async function openAdmin(){
   const modal=document.createElement('div'); modal.className='modal';
   modal.innerHTML=`<div class="sheet"><h3>⚙️ Admin</h3>
     <label>Naziv zgrade</label>
-    <div style="display:flex;gap:8px">
+    <div class="flex gap-2">
       <input id="z_naziv" value="${(ZGRADA&&ZGRADA.naziv)||''}">
-      <button class="badge" style="background:var(--blue);color:#fff;padding:0 14px" onclick="saveZgrada()">✓</button>
+      <button class="btn btn-sm btn-primary" onclick="saveZgrada()">✓</button>
     </div>
     <label>Stanovi (${DATA.stanovi.length})</label>
-    <div id="admStan" style="max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px">
-      ${DATA.stanovi.map(s=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 4px;border-bottom:1px solid var(--line)">
+    <div id="admStan" class="scroll-box">
+      ${DATA.stanovi.map(s=>`<div class="flex justify-between items-center py-1 px-1 border-b">
         <span><b>${s.oznaka}</b> <span class="muted">${s.sprat?('· '+s.sprat):''} ${s.kvadratura?('· '+s.kvadratura+'m²'):''}</span></span>
-        <button class="badge" style="background:var(--redbg);color:var(--red)" onclick="delStan('${s.id}','${s.oznaka}')">obriši</button>
+        <button class="btn btn-sm btn-danger" onclick="delStan('${s.id}','${s.oznaka}')">obriši</button>
       </div>`).join('')}
     </div>
-    <div style="display:flex;gap:8px;margin-top:8px">
+    <div class="flex gap-2 mt-2">
       <input id="new_ozn" placeholder="oznaka (npr. S-39 ili PP-01)">
-      <select id="new_vrsta" style="max-width:160px">
+      <select id="new_vrsta" class="maxw-xs">
         <option value="stan">Stan</option>
         <option value="poslovni">Poslovni prostor</option></select>
-      <button class="badge" style="background:var(--green);color:#fff;padding:0 16px" onclick="addStan()">+ Dodaj</button>
+      <button class="btn btn-sm btn-primary" onclick="addStan()">+ Dodaj</button>
     </div>
-    <hr style="margin:16px 0;border:none;border-top:1px solid var(--line)">
+    <hr class="mt-4 mb-4 border-0 border-t">
     <label>Checklista — kategorije i stavke (${DATA.stavke.length})</label>
-    <div id="admStav" style="max-height:30vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px">
-      ${rooms().map(room=>`<div style="font-weight:700;color:var(--navy);font-size:12px;margin:6px 0 2px">${room}</div>`+
-        DATA.stavke.filter(s=>s.prostorija===room).map(s=>`<div style="display:flex;gap:6px;align-items:center;padding:3px 4px;border-bottom:1px solid var(--line)">
-          <span style="font-size:13px;flex:1">${s.naziv}</span>
-          <select onchange="setPrimjenjivost(${s.id},this.value)" style="font-size:11px;padding:2px;width:auto" title="primjenjivost">
+    <div id="admStav" class="scroll-box">
+      ${rooms().map(room=>`<div class="fw-7 text-accent fs-xs mt-2 mb-1">${room}</div>`+
+        DATA.stavke.filter(s=>s.prostorija===room).map(s=>`<div class="flex gap-2 items-center py-1 px-1 border-b">
+          <span class="fs-sm flex-1">${s.naziv}</span>
+          <select onchange="setPrimjenjivost(${s.id},this.value)" class="fs-xs p-1 w-auto" title="primjenjivost">
             <option value="sve" ${(s.primjenjivost||'sve')==='sve'?'selected':''}>sve</option>
             <option value="el" ${s.primjenjivost==='el'?'selected':''}>el</option>
             <option value="vod" ${s.primjenjivost==='vod'?'selected':''}>vod</option>
           </select>
-          <button class="badge" style="background:var(--redbg);color:var(--red)" onclick="delStavka(${s.id})">×</button>
+          <button class="btn btn-sm btn-danger" onclick="delStavka(${s.id})">×</button>
         </div>`).join('')).join('')}
     </div>
     <label>Dodaj stavku — upiši novu ILI postojeću kategoriju</label>
     <input id="new_pros" list="roomlist" placeholder="kategorija (npr. KUHINJA ili nova)">
     <datalist id="roomlist">${rooms().map(r=>`<option value="${r}">`).join('')}</datalist>
-    <select id="new_vrsta_st" style="margin-top:6px">
+    <select id="new_vrsta_st" class="mt-2">
       <option value="stan">za stanove</option>
       <option value="poslovni">za poslovni prostor</option>
       <option value="sve">za sve jedinice</option></select>
-    <select id="new_prim" style="margin-top:6px">
+    <select id="new_prim" class="mt-2">
       <option value="sve">važi za sve stanove</option>
       <option value="el">samo električno grijanje</option>
       <option value="vod">samo vodeno grijanje</option>
     </select>
-    <div style="display:flex;gap:8px;margin-top:6px">
+    <div class="flex gap-2 mt-2">
       <input id="new_stav" placeholder="naziv stavke / detalja za provjeru">
-      <button class="badge" style="background:var(--green);color:#fff;padding:0 16px" onclick="addStavka()">+ Dodaj</button>
+      <button class="btn btn-sm btn-primary" onclick="addStavka()">+ Dodaj</button>
     </div>
-    <hr style="margin:16px 0;border:none;border-top:1px solid var(--line)">
-    <button class="btn ghost" onclick="closeModal();renderSetup()">🔑 Promijeni Supabase ključeve</button>
-    <button class="btn ghost" onclick="closeModal()">Zatvori</button>
+    <hr class="mt-4 mb-4 border-0 border-t">
+    <button class="btn" onclick="closeModal();renderSetup()">🔑 Promijeni Supabase ključeve</button>
+    <button class="btn" onclick="closeModal()">Zatvori</button>
   </div>`;
   modal.onclick=e=>{ if(e.target===modal) closeModal(); };
   document.body.appendChild(modal);
@@ -1067,24 +1072,24 @@ async function openAdmin(){
 async function saveZgrada(){
   if(!ZGRADA) return;
   await sb.from('zgrade').update({naziv:val('z_naziv')}).eq('id',ZGRADA.id);
-  alert('Sačuvano ✓');
+  ui.toast('Sačuvano ✓');
 }
 async function addStan(){
   const oznaka=val('new_ozn'); if(!oznaka||!ZGRADA) return;
   const vrsta=val('new_vrsta')||'stan';
   const red=(DATA.stanovi.length?Math.max(...DATA.stanovi.map(s=>s.redoslijed||0)):0)+1;
   const { error }=await sb.from('stanovi').insert({zgrada_id:ZGRADA.id,oznaka,redoslijed:red,vrsta});
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   closeModal(); await loadAll(); openAdmin();
 }
 async function delStan(id,ozn){
-  if(!confirm('Obrisati stan '+ozn+'? Briše i sve provjere i dorade za taj stan.')) return;
+  if(!await ui.confirm({title:'Brisanje',text:'Obrisati stan '+ozn+'? Briše i sve provjere i dorade za taj stan.',ok:'Obriši',cancel:'Odustani',danger:true})) return;
   const { error }=await sb.from('stanovi').delete().eq('id',id);
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   closeModal(); await loadAll(); openAdmin();
 }
 async function addStavka(){
-  const pros=val('new_pros'), naziv=val('new_stav'); if(!pros||!naziv){ alert('Unesi kategoriju i naziv.'); return; }
+  const pros=val('new_pros'), naziv=val('new_stav'); if(!pros||!naziv){ ui.toast('Unesi kategoriju i naziv.',{type:'err'}); return; }
   const prim=val('new_prim')||'sve';
   const vrsta=val('new_vrsta_st')||'stan';
   const nid=(DATA.stavke.length?Math.max(...DATA.stavke.map(s=>s.id)):0)+1;
@@ -1092,20 +1097,20 @@ async function addStavka(){
   const red=inCat.length ? Math.max(...inCat.map(s=>s.redoslijed))+1
                          : (DATA.stavke.length?Math.max(...DATA.stavke.map(s=>s.redoslijed)):0)+1;
   const { error }=await sb.from('stavke').insert({id:nid,prostorija:pros,naziv,redoslijed:red,primjenjivost:prim,vrsta});
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   closeModal(); await loadAll(); openAdmin();
 }
 async function setPrimjenjivost(id,v){
   const { error }=await sb.from('stavke').update({primjenjivost:v}).eq('id',id);
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   await loadAll();
 }
 async function delStavka(id){
-  if(!confirm('Obrisati ovu stavku iz checkliste SVIH stanova? Briše i njene provjere/dorade.')) return;
+  if(!await ui.confirm({title:'Brisanje',text:'Obrisati ovu stavku iz checkliste SVIH stanova? Briše i njene provjere/dorade.',ok:'Obriši',cancel:'Odustani',danger:true})) return;
   await sb.from('dorade').delete().eq('stavka_id',id);
   await sb.from('provjere').delete().eq('stavka_id',id);
   const { error }=await sb.from('stavke').delete().eq('id',id);
-  if(error){ alert('Greška: '+error.message); return; }
+  if(error){ ui.toast('Greška: '+error.message,{type:'err'}); return; }
   closeModal(); await loadAll(); openAdmin();
 }
 
